@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  clerkId   String    @unique
+  email     String
+  name      String?
+  meetings  Meeting[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Meeting {
+  id                String             @id @default(cuid())
+  userId            String
+  title             String
+  transcript        String             @db.Text
+  summary           String             @db.Text
+  audioUrl          String?
+  actionItems       ActionItem[]
+  decisions         Decision[]
+  topics            Topic[]
+  followUpQuestions FollowUpQuestion[]
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+model ActionItem {
+  id        String   @id @default(cuid())
+  meetingId String
+  title     String
+  assignee  String?
+  deadline  String?
+  completed Boolean  @default(false)
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Decision {
+  id        String   @id @default(cuid())
+  meetingId String
+  content   String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Topic {
+  id        String   @id @default(cuid())
+  meetingId String
+  title     String
+  notes     String?
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model FollowUpQuestion {
+  id        String   @id @default(cuid())
+  meetingId String
+  question  String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
