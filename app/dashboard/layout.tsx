@@ -16,14 +16,13 @@ export default function DashboardLayout({
             MeetingMind
           </Link>
           <nav className="flex items-center gap-5 text-sm text-slate-600">
+            <Link href="/">Home</Link>
             <Link href="/dashboard">History</Link>
             <Link href="/dashboard/new">New meeting</Link>
             {hasClerkKey ? (
               <UserButton />
             ) : (
-              <span className="rounded-md border border-slate-200 px-3 py-1 text-slate-500">
-                Local
-              </span>
+              <Link href={{ pathname: "/sign-in" }}>Sign in</Link>
             )}
           </nav>
         </div>
