@@ -12,7 +12,7 @@ export default function DashboardLayout({
     <main className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Link className="font-semibold text-slate-950" href="/dashboard">
+          <Link className="font-semibold text-slate-950" href="/">
             MeetingMind
           </Link>
           <nav className="flex items-center gap-5 text-sm text-slate-600">
