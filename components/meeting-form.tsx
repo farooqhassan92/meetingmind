@@ -26,6 +26,10 @@ export function MeetingForm() {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Please sign in to analyze a meeting.");
+        }
+
         throw new Error("Analysis failed");
       }
 
