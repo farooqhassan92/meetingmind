@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { MeetingAnalysis } from "@/mcp-server/src/llm/schemas";
 
 export function MeetingForm() {
+  const router = useRouter();
   const [transcript, setTranscript] = useState("");
   const [analysis, setAnalysis] = useState<MeetingAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,8 +35,15 @@ export function MeetingForm() {
         throw new Error("Analysis failed");
       }
 
-      const payload = (await response.json()) as { analysis: MeetingAnalysis };
+      const payload = (await response.json()) as {
+        analysis: MeetingAnalysis;
+        meetingId?: string;
+      };
       setAnalysis(payload.analysis);
+
+      if (payload.meetingId) {
+        router.push(`/dashboard/${payload.meetingId}`);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Analysis failed");
     } finally {

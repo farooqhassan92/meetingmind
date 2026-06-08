@@ -1,8 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { analyzeMeeting } from "@/lib/mcp-client";
+import { prisma } from "@/lib/prisma";
 
 const requestSchema = z.object({
   transcript: z.string().min(20)
@@ -12,12 +13,27 @@ export async function POST(request: Request) {
   const hasClerkConfig = Boolean(
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
   );
+  let clerkUserId: string | null = null;
+  let userEmail: string | null = null;
+  let userName: string | null = null;
 
   if (hasClerkConfig) {
     const { userId } = await auth();
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await currentUser();
+    clerkUserId = userId;
+    userEmail = user?.primaryEmailAddress?.emailAddress ?? null;
+    userName = user?.fullName ?? user?.username ?? null;
+
+    if (!userEmail) {
+      return NextResponse.json(
+        { error: "Signed-in user is missing a primary email address." },
+        { status: 500 }
+      );
     }
   }
 
@@ -32,5 +48,54 @@ export async function POST(request: Request) {
 
   const analysis = await analyzeMeeting(body.data.transcript);
 
-  return NextResponse.json({ analysis });
+  if (!clerkUserId || !userEmail) {
+    return NextResponse.json({ analysis });
+  }
+
+  const appUser = await prisma.user.upsert({
+    where: { clerkId: clerkUserId },
+    update: {
+      email: userEmail,
+      name: userName
+    },
+    create: {
+      clerkId: clerkUserId,
+      email: userEmail,
+      name: userName
+    }
+  });
+
+  const meeting = await prisma.meeting.create({
+    data: {
+      userId: appUser.id,
+      title: analysis.title,
+      transcript: body.data.transcript,
+      summary: analysis.summary,
+      actionItems: {
+        create: analysis.actionItems.map((item) => ({
+          title: item.title,
+          assignee: item.assignee,
+          deadline: item.deadline
+        }))
+      },
+      decisions: {
+        create: analysis.decisions.map((decision) => ({
+          content: decision
+        }))
+      },
+      topics: {
+        create: analysis.topics.map((topic) => ({
+          title: topic.title,
+          notes: topic.notes
+        }))
+      },
+      followUpQuestions: {
+        create: analysis.followUpQuestions.map((question) => ({
+          question
+        }))
+      }
+    }
+  });
+
+  return NextResponse.json({ analysis, meetingId: meeting.id });
 }
