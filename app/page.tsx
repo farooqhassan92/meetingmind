@@ -1,3 +1,5 @@
+import { UserButton } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { ArrowRight, FileAudio, ListChecks, Search } from "lucide-react";
 import Link from "next/link";
 
@@ -9,7 +11,12 @@ const features = [
   { icon: Search, label: "Searchable meeting history" }
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const hasClerkConfig = Boolean(
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
+  );
+  const { userId } = hasClerkConfig ? await auth() : { userId: null };
+
   return (
     <main className="min-h-screen bg-slate-50">
       <section className="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-8">
@@ -17,9 +24,25 @@ export default function HomePage() {
           <Link className="text-lg font-semibold text-slate-950" href="/">
             MeetingMind
           </Link>
-          <Button asChild variant="outline">
-            <Link href="/dashboard">Dashboard</Link>
-          </Button>
+          <div className="flex items-center gap-3">
+            {userId ? (
+              <>
+                <Button asChild variant="outline">
+                  <Link href="/dashboard">Dashboard</Link>
+                </Button>
+                <UserButton />
+              </>
+            ) : (
+              <>
+                <Button asChild variant="outline">
+                  <Link href={{ pathname: "/sign-in" }}>Sign in</Link>
+                </Button>
+                <Button asChild>
+                  <Link href={{ pathname: "/sign-up" }}>Sign up</Link>
+                </Button>
+              </>
+            )}
+          </div>
         </nav>
 
         <div className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.1fr_0.9fr]">
