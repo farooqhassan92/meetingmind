@@ -57,8 +57,28 @@ function findDecisions(sentences: string[]) {
 }
 
 function findQuestions(sentences: string[]) {
-  return sentences
-    .filter((sentence) => sentence.endsWith("?"))
+  const directQuestions = sentences.filter((sentence) => sentence.endsWith("?"));
+
+  if (directQuestions.length > 0) {
+    return directQuestions.slice(0, 5);
+  }
+
+  const followUpSentence = sentences.find((sentence) =>
+    sentence.toLowerCase().includes("follow-up questions included")
+  );
+
+  if (!followUpSentence) {
+    return [];
+  }
+
+  return followUpSentence
+    .replace(/^.*follow-up questions included\s*/i, "")
+    .split(/,\s*and\s*|,\s*|\s+and\s+/)
+    .map((question) => question.trim().replace(/\.$/, ""))
+    .filter(Boolean)
+    .map((question) =>
+      question.endsWith("?") ? question : `${question}?`
+    )
     .slice(0, 5);
 }
 
