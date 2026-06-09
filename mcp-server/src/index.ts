@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { loadEnvConfig } from "@next/env";
 
 import {
   analyzeMeetingInputSchema,
@@ -9,6 +10,8 @@ import {
   transcribeAudioInputSchema,
   transcribeAudioTool
 } from "./tools/transcribe";
+
+loadEnvConfig(process.cwd());
 
 const server = new McpServer({
   name: "meetingmind-mcp-server",

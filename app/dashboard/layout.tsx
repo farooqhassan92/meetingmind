@@ -1,5 +1,6 @@
-import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
+
+import { UserMenu } from "@/components/auth/user-menu";
 
 export default function DashboardLayout({
   children
@@ -20,7 +21,7 @@ export default function DashboardLayout({
             <Link href="/dashboard">History</Link>
             <Link href="/dashboard/new">New meeting</Link>
             {hasClerkKey ? (
-              <UserButton />
+              <UserMenu />
             ) : (
               <Link href={{ pathname: "/sign-in" }}>Sign in</Link>
             )}

@@ -8,8 +8,8 @@ export default function NewMeetingPage() {
           Analyze a meeting
         </h1>
         <p className="mt-2 max-w-2xl text-slate-600">
-          Paste a transcript now, or connect UploadThing for audio uploads in
-          the next step.
+          Upload an audio recording to transcribe it, or paste a transcript
+          directly.
         </p>
       </div>
       <MeetingForm />

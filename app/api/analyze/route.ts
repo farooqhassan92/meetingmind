@@ -46,56 +46,74 @@ export async function POST(request: Request) {
     );
   }
 
-  const analysis = await analyzeMeeting(body.data.transcript);
+  let analysis;
+
+  try {
+    analysis = await analyzeMeeting(body.data.transcript);
+  } catch (caught) {
+    const message =
+      caught instanceof Error ? caught.message : "Meeting analysis failed.";
+
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 
   if (!clerkUserId || !userEmail) {
     return NextResponse.json({ analysis });
   }
 
-  const appUser = await prisma.user.upsert({
-    where: { clerkId: clerkUserId },
-    update: {
-      email: userEmail,
-      name: userName
-    },
-    create: {
-      clerkId: clerkUserId,
-      email: userEmail,
-      name: userName
-    }
-  });
+  let meeting;
 
-  const meeting = await prisma.meeting.create({
-    data: {
-      userId: appUser.id,
-      title: analysis.title,
-      transcript: body.data.transcript,
-      summary: analysis.summary,
-      actionItems: {
-        create: analysis.actionItems.map((item) => ({
-          title: item.title,
-          assignee: item.assignee,
-          deadline: item.deadline
-        }))
+  try {
+    const appUser = await prisma.user.upsert({
+      where: { clerkId: clerkUserId },
+      update: {
+        email: userEmail,
+        name: userName
       },
-      decisions: {
-        create: analysis.decisions.map((decision) => ({
-          content: decision
-        }))
-      },
-      topics: {
-        create: analysis.topics.map((topic) => ({
-          title: topic.title,
-          notes: topic.notes
-        }))
-      },
-      followUpQuestions: {
-        create: analysis.followUpQuestions.map((question) => ({
-          question
-        }))
+      create: {
+        clerkId: clerkUserId,
+        email: userEmail,
+        name: userName
       }
-    }
-  });
+    });
+
+    meeting = await prisma.meeting.create({
+      data: {
+        userId: appUser.id,
+        title: analysis.title,
+        transcript: body.data.transcript,
+        summary: analysis.summary,
+        actionItems: {
+          create: analysis.actionItems.map((item) => ({
+            title: item.title,
+            assignee: item.assignee,
+            deadline: item.deadline
+          }))
+        },
+        decisions: {
+          create: analysis.decisions.map((decision) => ({
+            content: decision
+          }))
+        },
+        topics: {
+          create: analysis.topics.map((topic) => ({
+            title: topic.title,
+            notes: topic.notes
+          }))
+        },
+        followUpQuestions: {
+          create: analysis.followUpQuestions.map((question) => ({
+            question
+          }))
+        }
+      }
+    });
+  } catch (caught) {
+    const message =
+      caught instanceof Error ? caught.message : "Could not save meeting.";
+
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 
   return NextResponse.json({ analysis, meetingId: meeting.id });
 }

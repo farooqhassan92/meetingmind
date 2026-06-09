@@ -16,7 +16,7 @@ export default function RootLayout({
 
   if (!publishableKey) {
     return (
-      <html lang="en">
+      <html lang="en" suppressHydrationWarning>
         <body suppressHydrationWarning>{children}</body>
       </html>
     );
@@ -24,7 +24,7 @@ export default function RootLayout({
 
   return (
     <ClerkProvider publishableKey={publishableKey}>
-      <html lang="en">
+      <html lang="en" suppressHydrationWarning>
         <body suppressHydrationWarning>{children}</body>
       </html>
     </ClerkProvider>

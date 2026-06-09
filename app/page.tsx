@@ -1,8 +1,8 @@
-import { UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { ArrowRight, FileAudio, ListChecks, Search } from "lucide-react";
 import Link from "next/link";
 
+import { UserMenu } from "@/components/auth/user-menu";
 import { Button } from "@/components/ui/button";
 
 const features = [
@@ -30,7 +30,7 @@ export default async function HomePage() {
                 <Button asChild variant="outline">
                   <Link href="/dashboard">Dashboard</Link>
                 </Button>
-                <UserButton />
+                <UserMenu />
               </>
             ) : (
               <>

@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, extname, join } from "node:path";
 
 import { z } from "zod";
 
@@ -26,8 +26,10 @@ export async function transcribeAudioTool(
   const workDir = join(tmpdir(), `meetingmind-${randomUUID()}`);
   await mkdir(workDir, { recursive: true });
 
-  const inputPath = join(workDir, input.fileName);
+  const inputExtension = extname(input.fileName) || ".audio";
+  const inputPath = join(workDir, `audio${inputExtension}`);
   const outputPath = join(workDir, "transcript.txt");
+  const inputTranscriptPath = join(workDir, "audio.txt");
 
   try {
     await writeFile(inputPath, Buffer.from(input.audioBase64, "base64"));
@@ -37,32 +39,56 @@ export async function transcribeAudioTool(
       .filter(Boolean);
 
     const args = configuredArgs.map((arg) =>
-      arg.replace("{input}", inputPath).replace("{output}", outputPath)
+      arg
+        .replace("{input}", inputPath)
+        .replace("{output}", outputPath)
+        .replace("{outputDir}", workDir)
     );
 
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(command, args, {
-        shell: true,
-        stdio: ["ignore", "pipe", "pipe"]
-      });
+    const { stdout } = await new Promise<{ stdout: string }>(
+      (resolve, reject) => {
+        const child = spawn(command, args, {
+          cwd: workDir,
+          shell: true,
+          stdio: ["ignore", "pipe", "pipe"]
+        });
 
-      let stderr = "";
-      child.stderr.on("data", (chunk) => {
-        stderr += String(chunk);
-      });
+        let stdout = "";
+        let stderr = "";
+        child.stdout.on("data", (chunk) => {
+          stdout += String(chunk);
+        });
+        child.stderr.on("data", (chunk) => {
+          stderr += String(chunk);
+        });
 
-      child.on("error", reject);
-      child.on("close", (code) => {
-        if (code === 0) {
-          resolve();
-          return;
-        }
+        child.on("error", reject);
+        child.on("close", (code) => {
+          if (code === 0) {
+            resolve({ stdout });
+            return;
+          }
 
-        reject(new Error(stderr || `Local Whisper exited with code ${code}.`));
-      });
-    });
+          if (stderr.includes("FileNotFoundError")) {
+            reject(
+              new Error(
+                "Local Whisper could not read the audio file. Install ffmpeg and make sure ffmpeg is available on PATH, then restart the dev server."
+              )
+            );
+            return;
+          }
 
-    const transcript = await readFile(outputPath, "utf8");
+          reject(
+            new Error(stderr || `Local Whisper exited with code ${code}.`)
+          );
+        });
+      }
+    );
+
+    const transcript = await readTranscriptOutput(
+      [outputPath, inputTranscriptPath],
+      stdout
+    );
 
     return {
       transcript: transcript.trim()
@@ -70,4 +96,50 @@ export async function transcribeAudioTool(
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }
+}
+
+async function readTranscriptOutput(preferredPaths: string[], stdout: string) {
+  for (const path of preferredPaths) {
+    try {
+      return await readFile(path, "utf8");
+    } catch {
+      // Try the next known output pattern.
+    }
+  }
+
+  const outputDir = dirname(preferredPaths[0]);
+  const txtFiles = (await readdir(outputDir).catch(() => [])).filter((file) =>
+    file.toLowerCase().endsWith(".txt")
+  );
+
+  for (const file of txtFiles) {
+    const content = await readFile(join(outputDir, file), "utf8");
+
+    if (content.trim()) {
+      return content;
+    }
+  }
+
+  const stdoutTranscript = stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line &&
+        !line.startsWith("[") &&
+        !line.toLowerCase().includes("detected language")
+    )
+    .join("\n");
+
+  if (stdoutTranscript) {
+    return stdoutTranscript;
+  }
+
+  const generatedFiles = await readdir(outputDir).catch(() => []);
+
+  throw new Error(
+    `Local Whisper completed, but no transcript text file was found. Generated files: ${
+      generatedFiles.join(", ") || "none"
+    }.`
+  );
 }

@@ -32,7 +32,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const transcription = await transcribeAudio(body.data);
+  try {
+    const transcription = await transcribeAudio(body.data);
 
-  return NextResponse.json(transcription);
+    return NextResponse.json(transcription);
+  } catch (caught) {
+    const message =
+      caught instanceof Error ? caught.message : "Audio transcription failed.";
+
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
