@@ -13,24 +13,24 @@ const actionVerbs = [
   "finish"
 ];
 
-function sentencesFromTranscript(transcript: string) {
+export function sentencesFromTranscript(transcript: string) {
   return transcript
-    .replace(/\s+/g, " ")
-    .split(/(?<=[.!?])\s+/)
+    .split(/(?<=[.!?])\s+|\n+/)
     .map((sentence) => sentence.trim())
+    .map((sentence) => sentence.replace(/\s+/g, " "))
     .filter(Boolean);
 }
 
-function pickTitle(sentences: string[]) {
+export function pickTitle(sentences: string[]) {
   const first = sentences[0] ?? "Meeting notes";
   return first.length > 70 ? `${first.slice(0, 67)}...` : first;
 }
 
-function buildSummary(sentences: string[]) {
+export function buildSummary(sentences: string[]) {
   return sentences.slice(0, 3).join(" ") || "No transcript content provided.";
 }
 
-function findActionItems(sentences: string[]) {
+export function findActionItems(sentences: string[]) {
   return sentences
     .filter((sentence) =>
       actionVerbs.some((verb) => sentence.toLowerCase().includes(verb))
@@ -43,20 +43,44 @@ function findActionItems(sentences: string[]) {
     }));
 }
 
-function findDecisions(sentences: string[]) {
+export function findDecisions(sentences: string[]) {
   return sentences
     .filter((sentence) => {
       const lower = sentence.toLowerCase();
       return (
+        lower.includes("decision") ||
         lower.includes("decided") ||
         lower.includes("agreed") ||
-        lower.includes("approved")
+        lower.includes("approved") ||
+        lower.includes("confirmed") ||
+        lower.includes("settled") ||
+        lower.includes("selected") ||
+        lower.includes("chosen") ||
+        lower.includes("committed") ||
+        lower.includes("we will") ||
+        lower.includes("we are going to") ||
+        lower.includes("we're going to") ||
+        lower.includes("we should go with") ||
+        lower.includes("we'll go with") ||
+        lower.includes("the plan is") ||
+        lower.includes("launch date") ||
+        lower.includes("launch will") ||
+        lower.includes("include in launch") ||
+        lower.includes("add short onboarding") ||
+        lower.includes("stays scheduled") ||
+        lower.includes("will stay scheduled") ||
+        /\b(?:launch|release|rollout)\b.*\b(?:next|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\/\d{1,2})\b/.test(
+          lower
+        ) ||
+        /\b(?:we|let's|lets)\s+(?:add|include|ship|launch|keep|move|use)\b/.test(
+          lower
+        )
       );
     })
     .slice(0, 5);
 }
 
-function findQuestions(sentences: string[]) {
+export function findQuestions(sentences: string[]) {
   const directQuestions = sentences.filter((sentence) => sentence.endsWith("?"));
 
   if (directQuestions.length > 0) {
