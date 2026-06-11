@@ -32,9 +32,9 @@ export default async function InvitePage({
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <section className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-10">
-        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-2">
+      <section className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4 py-8 sm:px-6 sm:py-10">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="flex flex-wrap items-center gap-2">
             <Mail className="h-5 w-5 text-teal-700" />
             <h1 className="text-2xl font-semibold text-slate-950">
               Organization invite
@@ -69,7 +69,7 @@ export default async function InvitePage({
           </div>
 
           {invitation.acceptedAt ? (
-            <Button asChild className="mt-5">
+            <Button asChild className="mt-5 w-full sm:w-auto">
               <Link href="/dashboard">
                 <CheckCircle2 className="h-4 w-4" />
                 Go to dashboard
@@ -82,7 +82,7 @@ export default async function InvitePage({
           ) : userId ? (
             <form action={acceptInvitationAction} className="mt-5">
               <input name="token" type="hidden" value={token} />
-              <Button type="submit">
+              <Button className="w-full sm:w-auto" type="submit">
                 <CheckCircle2 className="h-4 w-4" />
                 Accept invite
               </Button>
@@ -92,7 +92,7 @@ export default async function InvitePage({
               <p className="text-sm text-slate-600">
                 Sign in with {invitation.email}, then return to this invite.
               </p>
-              <Button asChild>
+              <Button asChild className="w-full sm:w-auto">
                 <Link href={"/sign-in" as Route}>Sign in</Link>
               </Button>
             </div>

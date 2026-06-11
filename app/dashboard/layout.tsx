@@ -12,11 +12,11 @@ export default function DashboardLayout({
   return (
     <main className="min-h-screen bg-slate-50">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-3">
+        <div className="mx-auto flex min-h-16 max-w-7xl flex-col items-start gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <Link className="text-lg font-semibold text-slate-950" href="/">
             MeetingMind
           </Link>
-          <nav className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          <nav className="flex w-full flex-wrap items-center gap-2 text-sm text-slate-600 sm:w-auto">
             <Link className="rounded-md px-3 py-2 hover:bg-slate-100" href="/">
               Home
             </Link>
@@ -46,7 +46,9 @@ export default function DashboardLayout({
           </nav>
         </div>
       </header>
-      <div className="mx-auto max-w-7xl px-6 py-8">{children}</div>
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        {children}
+      </div>
     </main>
   );
 }

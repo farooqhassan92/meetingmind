@@ -189,10 +189,10 @@ export function MeetingForm({ organizations = [] }: MeetingFormProps) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+    <div className="grid min-w-0 gap-6 lg:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-5">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap items-center gap-2">
             <Building2 className="h-5 w-5 text-teal-700" />
             <h2 className="text-lg font-semibold text-slate-950">
               Meeting scope
@@ -202,7 +202,7 @@ export function MeetingForm({ organizations = [] }: MeetingFormProps) {
             Choose where this meeting belongs before analysis so search and
             permissions stay accurate.
           </p>
-        {organizations.length > 0 ? (
+          {organizations.length > 0 ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">
               <Tooltip content="The organization controls who can search and view this meeting.">
@@ -245,11 +245,11 @@ export function MeetingForm({ organizations = [] }: MeetingFormProps) {
               </select>
             </label>
           </div>
-        ) : null}
+          ) : null}
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap items-center gap-2">
             <FileAudio className="h-5 w-5 text-teal-700" />
             <h2 className="text-lg font-semibold text-slate-950">
               Audio upload
@@ -265,7 +265,7 @@ export function MeetingForm({ organizations = [] }: MeetingFormProps) {
           >
             Audio recording
           </label>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
             <input
               accept="audio/*,video/mp4,.mp4,.m4a"
               className="block min-w-0 flex-1 text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
@@ -279,6 +279,7 @@ export function MeetingForm({ organizations = [] }: MeetingFormProps) {
               type="file"
             />
             <Button
+              className="w-full sm:w-auto"
               disabled={!audioFile || isTranscribing}
               onClick={onTranscribe}
               type="button"
@@ -307,8 +308,8 @@ export function MeetingForm({ organizations = [] }: MeetingFormProps) {
           ) : null}
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap items-center gap-2">
             <ClipboardList className="h-5 w-5 text-teal-700" />
             <h2 className="text-lg font-semibold text-slate-950">
               Transcript
@@ -327,8 +328,9 @@ export function MeetingForm({ organizations = [] }: MeetingFormProps) {
             placeholder="Paste a transcript or transcribe audio first..."
             value={transcript}
           />
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="mt-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
             <Button
+              className="w-full sm:w-auto"
               disabled={isLoading || transcript.trim().length < 20}
               onClick={onAnalyze}
             >
@@ -349,8 +351,8 @@ export function MeetingForm({ organizations = [] }: MeetingFormProps) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-2">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-center gap-2">
           <Sparkles className="h-5 w-5 text-teal-700" />
           <h2 className="text-lg font-semibold text-slate-950">Results</h2>
         </div>

@@ -43,12 +43,12 @@ export default async function OnboardingPage() {
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <section className="mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-6 py-10">
-        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-4 py-8 sm:px-6 sm:py-10">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           <p className="text-sm font-medium uppercase tracking-wide text-teal-700">
             Welcome to MeetingMind
           </p>
-          <h1 className="mt-3 text-4xl font-semibold text-slate-950">
+          <h1 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">
             Join or create an organization
           </h1>
           <p className="mt-3 max-w-2xl leading-7 text-slate-600">
@@ -59,7 +59,7 @@ export default async function OnboardingPage() {
         </div>
 
         <div className="mt-8 grid gap-5 lg:grid-cols-2">
-          <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-teal-700" />
               <h2 className="text-lg font-semibold text-slate-950">
@@ -83,14 +83,14 @@ export default async function OnboardingPage() {
                 placeholder="Acme Inc."
                 required
               />
-              <Button type="submit">
+              <Button className="w-full sm:w-auto" type="submit">
                 <Building2 className="h-4 w-4" />
                 Create as CEO
               </Button>
             </form>
           </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="flex items-center gap-2">
               <Mail className="h-5 w-5 text-teal-700" />
               <h2 className="text-lg font-semibold text-slate-950">
@@ -116,7 +116,7 @@ export default async function OnboardingPage() {
                         ? ` / ${invitation.team.name} ${invitation.teamRole}`
                         : ""}
                     </p>
-                    <Button asChild className="mt-3" variant="outline">
+                    <Button asChild className="mt-3 w-full sm:w-auto" variant="outline">
                       <Link href={`/invite/${invitation.token}` as Route}>
                         Accept invite
                       </Link>

@@ -7,8 +7,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 export function DeleteMeetingButton({
+  className,
   meetingId
 }: {
+  className?: string;
   meetingId: string;
 }) {
   const router = useRouter();
@@ -44,6 +46,7 @@ export function DeleteMeetingButton({
 
   return (
     <Button
+      className={className}
       disabled={isDeleting}
       onClick={onDelete}
       type="button"

@@ -54,8 +54,8 @@ export default async function MeetingDetailPage({
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold text-slate-950">
+        <div className="min-w-0 flex-1">
+          <h1 className="break-words text-2xl font-semibold text-slate-950 sm:text-3xl">
             {meeting.title}
           </h1>
           <p className="mt-2 text-sm text-slate-500">
@@ -66,16 +66,21 @@ export default async function MeetingDetailPage({
             {meeting.team?.name ?? "No team"}
           </p>
         </div>
-        {canDelete ? <DeleteMeetingButton meetingId={meeting.id} /> : null}
+        {canDelete ? (
+          <DeleteMeetingButton
+            className="w-full sm:w-auto"
+            meetingId={meeting.id}
+          />
+        ) : null}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <h2 className="text-lg font-semibold text-slate-950">Summary</h2>
         <p className="mt-3 leading-7 text-slate-700">{meeting.summary}</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <h2 className="text-lg font-semibold text-slate-950">
             Action items
           </h2>
@@ -92,7 +97,7 @@ export default async function MeetingDetailPage({
           </ul>
         </section>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <h2 className="text-lg font-semibold text-slate-950">Decisions</h2>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-700">
             {meeting.decisions.map((decision) => (
@@ -103,7 +108,7 @@ export default async function MeetingDetailPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <h2 className="text-lg font-semibold text-slate-950">Topics</h2>
           <ul className="mt-3 space-y-3 text-sm text-slate-700">
             {meeting.topics.map((topic) => (
@@ -119,7 +124,7 @@ export default async function MeetingDetailPage({
           </ul>
         </section>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <h2 className="text-lg font-semibold text-slate-950">
             Follow-up questions
           </h2>
@@ -137,7 +142,7 @@ export default async function MeetingDetailPage({
         </section>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <h2 className="text-lg font-semibold text-slate-950">Transcript</h2>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">
           {meeting.transcript}

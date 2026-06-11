@@ -150,13 +150,13 @@ export default async function WorkspacePage({
         </Button>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-end gap-3">
           <form
             action="/dashboard/workspace"
-            className="flex min-w-64 flex-1 flex-wrap items-end gap-2"
+            className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-end"
           >
-            <label className="min-w-64 flex-1 text-sm font-medium text-slate-700">
+            <label className="min-w-0 flex-1 text-sm font-medium text-slate-700">
               Organization
               <select
                 className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
@@ -171,7 +171,7 @@ export default async function WorkspacePage({
               </select>
             </label>
             <input name="tab" type="hidden" value={selectedTab} />
-            <Button type="submit" variant="outline">
+            <Button className="w-full sm:w-auto" type="submit" variant="outline">
               Switch
             </Button>
           </form>
@@ -184,24 +184,28 @@ export default async function WorkspacePage({
           </Tooltip>
         </div>
 
-        <form action={createOrganizationAction} className="mt-5 flex gap-2">
+        <form
+          action={createOrganizationAction}
+          className="mt-5 flex flex-col gap-2 sm:flex-row"
+        >
           <input
             className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
             name="name"
             placeholder="Create another organization..."
             required
           />
-          <Button type="submit" variant="outline">
+          <Button className="w-full sm:w-auto" type="submit" variant="outline">
             <Plus className="h-4 w-4" />
             Create
           </Button>
         </form>
       </div>
 
-      <nav className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+      <nav className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:flex sm:flex-wrap">
         {tabs.map((tab) => (
           <Button
             asChild
+            className="w-full sm:w-auto"
             key={tab.value}
             variant={selectedTab === tab.value ? "default" : "outline"}
           >
@@ -280,7 +284,7 @@ function OverviewPanel({
   ];
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-950">
@@ -336,16 +340,16 @@ function TeamsPanel({
       {canCreateTeam ? (
         <form
           action={createTeamAction}
-          className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
+          className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:p-5"
         >
           <input name="organizationId" type="hidden" value={organizationId} />
           <input
-            className="h-10 min-w-64 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+            className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
             name="name"
             placeholder="New team name"
             required
           />
-          <Button type="submit">
+          <Button className="w-full sm:w-auto" type="submit">
             <Plus className="h-4 w-4" />
             Add team
           </Button>
@@ -354,7 +358,7 @@ function TeamsPanel({
 
       {teams.map((team) => (
         <div
-          className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
+          className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
           key={team.id}
         >
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -370,7 +374,7 @@ function TeamsPanel({
             {manageableTeamIds.has(team.id) ? (
               <form
                 action={assignTeamMemberAction}
-                className="flex flex-wrap gap-2"
+              className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap"
               >
                 <input name="teamId" type="hidden" value={team.id} />
                 <select
@@ -395,7 +399,7 @@ function TeamsPanel({
                     </option>
                   ))}
                 </select>
-                <Button type="submit" variant="outline">
+                <Button className="w-full sm:w-auto" type="submit" variant="outline">
                   Assign
                 </Button>
               </form>
@@ -417,10 +421,10 @@ function TeamsPanel({
                     </p>
                   </div>
                   {manageableTeamIds.has(team.id) ? (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap">
                       <form
                         action={assignTeamMemberAction}
-                        className="flex items-center gap-2"
+                        className="grid gap-2 sm:flex sm:items-center"
                       >
                         <input name="teamId" type="hidden" value={team.id} />
                         <input
@@ -440,7 +444,7 @@ function TeamsPanel({
                             </option>
                           ))}
                         </select>
-                        <Button type="submit" variant="outline">
+                        <Button className="w-full sm:w-auto" type="submit" variant="outline">
                           Update
                         </Button>
                       </form>
@@ -451,7 +455,7 @@ function TeamsPanel({
                           type="hidden"
                           value={member.userId}
                         />
-                        <Button type="submit" variant="destructive">
+                        <Button className="w-full sm:w-auto" type="submit" variant="destructive">
                           Remove
                         </Button>
                       </form>
@@ -493,7 +497,7 @@ function MembersPanel({
   organizationId: string;
 }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex items-center gap-2">
         <Users className="h-5 w-5 text-teal-700" />
         <h2 className="text-lg font-semibold text-slate-950">Members</h2>
@@ -511,10 +515,10 @@ function MembersPanel({
               <p className="text-sm text-slate-500">{member.user.email}</p>
             </div>
             {canManageMembers ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="grid w-full gap-2 sm:w-auto sm:flex sm:flex-wrap">
                 <form
                   action={updateOrganizationMemberRoleAction}
-                  className="flex gap-2"
+                  className="grid gap-2 sm:flex"
                 >
                   <input
                     name="organizationId"
@@ -534,7 +538,7 @@ function MembersPanel({
                       </option>
                     ))}
                   </select>
-                  <Button type="submit" variant="outline">
+                  <Button className="w-full sm:w-auto" type="submit" variant="outline">
                     Update
                   </Button>
                 </form>
@@ -545,7 +549,7 @@ function MembersPanel({
                     value={organizationId}
                   />
                   <input name="userId" type="hidden" value={member.userId} />
-                  <Button type="submit" variant="destructive">
+                  <Button className="w-full sm:w-auto" type="submit" variant="destructive">
                     Remove
                   </Button>
                 </form>
@@ -570,11 +574,11 @@ function MembersPanel({
       {canManageMembers ? (
         <form
           action={addExistingMemberAction}
-          className="mt-5 flex flex-wrap gap-2 rounded-md border border-slate-200 bg-slate-50 p-3"
+          className="mt-5 grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 sm:flex sm:flex-wrap"
         >
           <input name="organizationId" type="hidden" value={organizationId} />
           <input
-            className="h-10 min-w-64 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+            className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
             name="email"
             placeholder="Add signed-in user by email"
             required
@@ -592,7 +596,7 @@ function MembersPanel({
               </option>
             ))}
           </select>
-          <Button type="submit" variant="outline">
+          <Button className="w-full sm:w-auto" type="submit" variant="outline">
             Add
           </Button>
         </form>
@@ -619,7 +623,7 @@ function InvitationsPanel({
       {canInvite ? (
         <form
           action={createInvitationAction}
-          className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
+          className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
         >
           <div className="mb-4">
             <h2 className="text-lg font-semibold text-slate-950">
@@ -674,7 +678,7 @@ function InvitationsPanel({
                 </option>
               ))}
             </select>
-            <Button type="submit">
+            <Button className="w-full lg:w-auto" type="submit">
               <Mail className="h-4 w-4" />
               Invite
             </Button>
@@ -686,7 +690,7 @@ function InvitationsPanel({
         </form>
       ) : null}
 
-      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex items-center gap-2">
           <Link2 className="h-5 w-5 text-teal-700" />
           <h2 className="text-lg font-semibold text-slate-950">
@@ -727,7 +731,7 @@ function InvitationsPanel({
                       type="hidden"
                       value={invitation.id}
                     />
-                    <Button type="submit" variant="destructive">
+                    <Button className="w-full sm:w-auto" type="submit" variant="destructive">
                       Cancel invite
                     </Button>
                   </form>

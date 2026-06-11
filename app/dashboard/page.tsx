@@ -252,7 +252,7 @@ export default async function DashboardPage({
 
   return (
     <section className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium uppercase tracking-wide text-teal-700">
@@ -266,7 +266,7 @@ export default async function DashboardPage({
               one place.
             </p>
           </div>
-          <Button asChild>
+          <Button asChild className="w-full sm:w-auto">
             <Link href="/dashboard/new">
               <Plus className="h-4 w-4" />
               New meeting
@@ -364,11 +364,11 @@ export default async function DashboardPage({
           </label>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-end gap-3">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
           <label className="text-sm font-medium text-slate-700">
             From
             <input
-              className="mt-2 h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+              className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
               defaultValue={from}
               max={to || undefined}
               name="from"
@@ -378,7 +378,7 @@ export default async function DashboardPage({
           <label className="text-sm font-medium text-slate-700">
             To
             <input
-              className="mt-2 h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+              className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
               defaultValue={to}
               max={dateInputValue(new Date())}
               min={from || undefined}
@@ -386,12 +386,12 @@ export default async function DashboardPage({
               type="date"
             />
           </label>
-          <Button type="submit" variant="outline">
+          <Button className="w-full sm:w-auto" type="submit" variant="outline">
             <Search className="h-4 w-4" />
             Apply filters
           </Button>
           {hasActiveFilters ? (
-            <Button asChild type="button" variant="outline">
+            <Button asChild className="w-full sm:w-auto" type="button" variant="outline">
               <Link href="/dashboard">
                 <X className="h-4 w-4" />
                 Clear
@@ -500,12 +500,15 @@ export default async function DashboardPage({
                     </span>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-xs text-slate-500">
+                <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end">
+                  <span className="text-sm text-slate-500">
                     {meeting.createdAt.toLocaleDateString()}
                   </span>
                   {canDeleteMeeting(meeting) ? (
-                    <DeleteMeetingButton meetingId={meeting.id} />
+                    <DeleteMeetingButton
+                      className="w-full sm:w-auto"
+                      meetingId={meeting.id}
+                    />
                   ) : null}
                 </div>
               </div>
