@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { analyzeMeeting } from "@/lib/mcp-client";
+import { createMeetingChunks } from "@/lib/meeting-chunks";
 import {
   ensureAppUser,
   getCreatableTeams,
@@ -155,6 +156,18 @@ export async function POST(request: Request) {
         }
       }
     });
+
+    try {
+      await createMeetingChunks({
+        analysis,
+        meetingId: meeting.id,
+        organizationId: organization.id,
+        teamId: team.id,
+        transcript: body.data.transcript
+      });
+    } catch (caught) {
+      console.error("Could not create meeting search chunks.", caught);
+    }
   } catch (caught) {
     const message =
       caught instanceof Error ? caught.message : "Could not save meeting.";

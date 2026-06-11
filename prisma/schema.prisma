@@ -123,6 +123,7 @@ model Meeting {
   decisions         Decision[]
   topics            Topic[]
   followUpQuestions FollowUpQuestion[]
+  chunks            MeetingChunk[]
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization      Organization?      @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   team              Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
@@ -132,6 +133,31 @@ model Meeting {
   @@index([userId, createdAt])
   @@index([organizationId, createdAt])
   @@index([teamId, createdAt])
+}
+
+model MeetingChunk {
+  id             String                     @id @default(cuid())
+  meetingId      String
+  organizationId String?
+  teamId         String?
+  type           MeetingChunkType
+  content        String                     @db.Text
+  embedding      Unsupported("vector(768)")
+  meeting        Meeting                    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  createdAt      DateTime                   @default(now())
+
+  @@index([meetingId])
+  @@index([organizationId])
+  @@index([teamId])
+}
+
+enum MeetingChunkType {
+  SUMMARY
+  TRANSCRIPT
+  ACTION_ITEM
+  DECISION
+  TOPIC
+  FOLLOW_UP_QUESTION
 }
 
 model ActionItem {
