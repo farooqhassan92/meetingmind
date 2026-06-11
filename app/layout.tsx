@@ -13,11 +13,39 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const hydrationAttributeCleanup = (
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `
+          (function () {
+            function cleanup() {
+              document.querySelectorAll("[bis_skin_checked]").forEach(function (node) {
+                node.removeAttribute("bis_skin_checked");
+              });
+            }
+
+            cleanup();
+            var runs = 0;
+            var interval = window.setInterval(function () {
+              cleanup();
+              runs += 1;
+              if (runs > 60) {
+                window.clearInterval(interval);
+              }
+            }, 16);
+          })();
+        `
+      }}
+    />
+  );
 
   if (!publishableKey) {
     return (
       <html lang="en" suppressHydrationWarning>
-        <body suppressHydrationWarning>{children}</body>
+        <head>{hydrationAttributeCleanup}</head>
+        <body suppressHydrationWarning>
+          {children}
+        </body>
       </html>
     );
   }
@@ -25,7 +53,10 @@ export default function RootLayout({
   return (
     <ClerkProvider publishableKey={publishableKey}>
       <html lang="en" suppressHydrationWarning>
-        <body suppressHydrationWarning>{children}</body>
+        <head>{hydrationAttributeCleanup}</head>
+        <body suppressHydrationWarning>
+          {children}
+        </body>
       </html>
     </ClerkProvider>
   );
