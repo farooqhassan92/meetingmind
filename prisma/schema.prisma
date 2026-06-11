@@ -9,18 +9,112 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  clerkId   String    @unique
-  email     String
-  name      String?
-  meetings  Meeting[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id                  String                   @id @default(cuid())
+  clerkId             String                   @unique
+  email               String
+  name                String?
+  meetings            Meeting[]
+  memberships         OrganizationMember[]
+  teamMemberships     TeamMember[]
+  sentInvitations     OrganizationInvitation[] @relation("SentInvitations")
+  acceptedInvitations OrganizationInvitation[] @relation("AcceptedInvitations")
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+}
+
+model Organization {
+  id          String                   @id @default(cuid())
+  name        String
+  slug        String                   @unique
+  teams       Team[]
+  members     OrganizationMember[]
+  meetings    Meeting[]
+  invitations OrganizationInvitation[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+}
+
+model Team {
+  id             String                   @id @default(cuid())
+  organizationId String
+  name           String
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  meetings       Meeting[]
+  members        TeamMember[]
+  invitations    OrganizationInvitation[]
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrganizationRole @default(MEMBER)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+enum OrganizationRole {
+  CEO
+  MEMBER
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      TeamRole @default(MEMBER)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+enum TeamRole {
+  MANAGER
+  MEMBER
+}
+
+model OrganizationInvitation {
+  id               String           @id @default(cuid())
+  organizationId   String
+  email            String
+  organizationRole OrganizationRole @default(MEMBER)
+  teamId           String?
+  teamRole         TeamRole?
+  token            String           @unique
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  invitedById      String
+  acceptedById     String?
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team             Team?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  invitedBy        User             @relation("SentInvitations", fields: [invitedById], references: [id], onDelete: Cascade)
+  acceptedBy       User?            @relation("AcceptedInvitations", fields: [acceptedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([email])
+  @@index([organizationId])
 }
 
 model Meeting {
   id                String             @id @default(cuid())
   userId            String
+  organizationId    String?
+  teamId            String?
   title             String
   transcript        String             @db.Text
   summary           String             @db.Text
@@ -30,10 +124,14 @@ model Meeting {
   topics            Topic[]
   followUpQuestions FollowUpQuestion[]
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization      Organization?      @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  team              Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
   @@index([userId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([teamId, createdAt])
 }
 
 model ActionItem {

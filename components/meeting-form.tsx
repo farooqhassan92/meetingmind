@@ -1,15 +1,45 @@
 "use client";
 
-import { FileAudio, Loader2, Sparkles } from "lucide-react";
+import {
+  Building2,
+  ClipboardList,
+  FileAudio,
+  Loader2,
+  Sparkles
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip } from "@/components/ui/tooltip";
 import type { MeetingAnalysis } from "@/mcp-server/src/llm/schemas";
 
-export function MeetingForm() {
+type MeetingFormOrganization = {
+  id: string;
+  name: string;
+  teams: {
+    id: string;
+    name: string;
+  }[];
+};
+
+type MeetingFormProps = {
+  organizations?: MeetingFormOrganization[];
+};
+
+export function MeetingForm({ organizations = [] }: MeetingFormProps) {
   const router = useRouter();
+  const [organizationId, setOrganizationId] = useState(
+    organizations[0]?.id ?? ""
+  );
+  const selectedOrganization = useMemo(
+    () =>
+      organizations.find((organization) => organization.id === organizationId),
+    [organizationId, organizations]
+  );
+  const teams = selectedOrganization?.teams ?? [];
+  const [teamId, setTeamId] = useState(teams[0]?.id ?? "");
   const [transcript, setTranscript] = useState("");
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<MeetingAnalysis | null>(null);
@@ -126,7 +156,11 @@ export function MeetingForm() {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript })
+        body: JSON.stringify({
+          organizationId: organizationId || undefined,
+          teamId: teamId || undefined,
+          transcript
+        })
       });
 
       const payload = await readJsonResponse<{
@@ -155,11 +189,78 @@ export function MeetingForm() {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 rounded-md border border-slate-200 bg-slate-50 p-4">
+    <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+      <div className="space-y-5">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-teal-700" />
+            <h2 className="text-lg font-semibold text-slate-950">
+              Meeting scope
+            </h2>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Choose where this meeting belongs before analysis so search and
+            permissions stay accurate.
+          </p>
+        {organizations.length > 0 ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">
+              <Tooltip content="The organization controls who can search and view this meeting.">
+                <span>Organization</span>
+              </Tooltip>
+              <select
+                className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                onChange={(event) => {
+                  const nextOrganizationId = event.target.value;
+                  const nextOrganization = organizations.find(
+                    (organization) => organization.id === nextOrganizationId
+                  );
+
+                  setOrganizationId(nextOrganizationId);
+                  setTeamId(nextOrganization?.teams[0]?.id ?? "");
+                }}
+                value={organizationId}
+              >
+                {organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              <Tooltip content="The selected team determines which managers and members can access this meeting.">
+                <span>Team</span>
+              </Tooltip>
+              <select
+                className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                onChange={(event) => setTeamId(event.target.value)}
+                value={teamId}
+              >
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2">
+            <FileAudio className="h-5 w-5 text-teal-700" />
+            <h2 className="text-lg font-semibold text-slate-950">
+              Audio upload
+            </h2>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Upload a recording to create a transcript, or skip this and paste a
+            transcript below.
+          </p>
           <label
-            className="text-sm font-medium text-slate-700"
+            className="mt-4 block text-sm font-medium text-slate-700"
             htmlFor="audio-file"
           >
             Audio recording
@@ -206,36 +307,53 @@ export function MeetingForm() {
           ) : null}
         </div>
 
-        <label
-          className="text-sm font-medium text-slate-700"
-          htmlFor="transcript"
-        >
-          Transcript
-        </label>
-        <Textarea
-          className="mt-3 min-h-80"
-          id="transcript"
-          onChange={(event) => setTranscript(event.target.value)}
-          placeholder="Paste a transcript..."
-          value={transcript}
-        />
-        <Button
-          className="mt-4"
-          disabled={isLoading || transcript.trim().length < 20}
-          onClick={onAnalyze}
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
-          Analyze
-        </Button>
-        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-teal-700" />
+            <h2 className="text-lg font-semibold text-slate-950">
+              Transcript
+            </h2>
+          </div>
+          <label
+            className="mt-4 block text-sm font-medium text-slate-700"
+            htmlFor="transcript"
+          >
+            Meeting transcript
+          </label>
+          <Textarea
+            className="mt-3 min-h-72"
+            id="transcript"
+            onChange={(event) => setTranscript(event.target.value)}
+            placeholder="Paste a transcript or transcribe audio first..."
+            value={transcript}
+          />
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button
+              disabled={isLoading || transcript.trim().length < 20}
+              onClick={onAnalyze}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              Analyze meeting
+            </Button>
+            {transcript.trim().length < 20 ? (
+              <span className="text-xs text-slate-500">
+                {20 - transcript.trim().length} more characters needed
+              </span>
+            ) : null}
+          </div>
+          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+        </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-950">Results</h2>
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-teal-700" />
+          <h2 className="text-lg font-semibold text-slate-950">Results</h2>
+        </div>
         {analysis ? (
           <div className="mt-4 space-y-5 text-sm text-slate-700">
             <section>
@@ -266,9 +384,10 @@ export function MeetingForm() {
             </section>
           </div>
         ) : (
-          <p className="mt-4 text-sm leading-6 text-slate-500">
-            Structured notes will appear here after analysis.
-          </p>
+          <div className="mt-4 rounded-md border border-dashed border-slate-300 p-6 text-sm leading-6 text-slate-500">
+            Structured notes, decisions, and action items will appear here after
+            analysis.
+          </div>
         )}
       </div>
     </div>

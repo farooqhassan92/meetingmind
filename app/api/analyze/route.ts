@@ -3,9 +3,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { analyzeMeeting } from "@/lib/mcp-client";
+import {
+  ensureAppUser,
+  getCreatableTeams,
+  getUserMeetingAccess
+} from "@/lib/organization-access";
 import { prisma } from "@/lib/prisma";
 
 const requestSchema = z.object({
+  organizationId: z.string().optional(),
+  teamId: z.string().optional(),
   transcript: z.string().min(20)
 });
 
@@ -64,22 +71,62 @@ export async function POST(request: Request) {
   let meeting;
 
   try {
-    const appUser = await prisma.user.upsert({
-      where: { clerkId: clerkUserId },
-      update: {
-        email: userEmail,
-        name: userName
-      },
-      create: {
-        clerkId: clerkUserId,
-        email: userEmail,
-        name: userName
-      }
+    const appUser = await ensureAppUser({
+      clerkId: clerkUserId,
+      email: userEmail,
+      name: userName
     });
+    const access = await getUserMeetingAccess(clerkUserId);
+
+    if (!access) {
+      return NextResponse.json(
+        { error: "Could not load workspace access." },
+        { status: 500 }
+      );
+    }
+
+    if (access.memberships.length === 0) {
+      return NextResponse.json(
+        { error: "Create or join an organization before saving meetings." },
+        { status: 403 }
+      );
+    }
+
+    const creatableTeams = getCreatableTeams(access);
+    const organization = body.data.organizationId
+      ? access.organizations.find(
+          (candidate) => candidate.id === body.data.organizationId
+        )
+      : access.organizations[0];
+
+    if (!organization) {
+      return NextResponse.json(
+        { error: "You do not have access to the selected organization." },
+        { status: 403 }
+      );
+    }
+
+    const team =
+      body.data.teamId
+        ? creatableTeams.find(
+            (candidate) => candidate.id === body.data.teamId
+          )
+        : creatableTeams.find(
+            (candidate) => candidate.organizationId === organization.id
+          );
+
+    if (!team || team.organizationId !== organization.id) {
+      return NextResponse.json(
+        { error: "You cannot create meetings for the selected team." },
+        { status: 400 }
+      );
+    }
 
     meeting = await prisma.meeting.create({
       data: {
         userId: appUser.id,
+        organizationId: organization.id,
+        teamId: team.id,
         title: analysis.title,
         transcript: body.data.transcript,
         summary: analysis.summary,

@@ -1,6 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+import {
+  buildAccessibleMeetingWhere,
+  getUserMeetingAccess
+} from "@/lib/organization-access";
 import { prisma } from "@/lib/prisma";
 
 export async function DELETE(
@@ -14,10 +18,24 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const access = await getUserMeetingAccess(userId);
+
+  if (!access) {
+    return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+  }
+
   const meeting = await prisma.meeting.findFirst({
     where: {
-      id,
-      user: { clerkId: userId }
+      AND: [
+        { id },
+        buildAccessibleMeetingWhere(access),
+        {
+          OR: [
+            { userId: access.user.id },
+            { organizationId: { in: access.orgWideOrganizationIds } }
+          ]
+        }
+      ]
     },
     select: { id: true }
   });

@@ -11,15 +11,33 @@ export default function DashboardLayout({
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Link className="font-semibold text-slate-950" href="/">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-3">
+          <Link className="text-lg font-semibold text-slate-950" href="/">
             MeetingMind
           </Link>
-          <nav className="flex items-center gap-5 text-sm text-slate-600">
-            <Link href="/">Home</Link>
-            <Link href="/dashboard">History</Link>
-            <Link href="/dashboard/new">New meeting</Link>
+          <nav className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <Link className="rounded-md px-3 py-2 hover:bg-slate-100" href="/">
+              Home
+            </Link>
+            <Link
+              className="rounded-md px-3 py-2 hover:bg-slate-100"
+              href="/dashboard"
+            >
+              History
+            </Link>
+            <Link
+              className="rounded-md px-3 py-2 hover:bg-slate-100"
+              href="/dashboard/new"
+            >
+              New meeting
+            </Link>
+            <Link
+              className="rounded-md px-3 py-2 hover:bg-slate-100"
+              href="/dashboard/workspace"
+            >
+              Workspace
+            </Link>
             {hasClerkKey ? (
               <UserMenu />
             ) : (
@@ -28,7 +46,7 @@ export default function DashboardLayout({
           </nav>
         </div>
       </header>
-      <div className="mx-auto max-w-6xl px-6 py-8">{children}</div>
+      <div className="mx-auto max-w-7xl px-6 py-8">{children}</div>
     </main>
   );
 }

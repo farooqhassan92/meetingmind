@@ -2,6 +2,10 @@ import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 
 import { DeleteMeetingButton } from "@/components/delete-meeting-button";
+import {
+  buildAccessibleMeetingWhere,
+  getUserMeetingAccess
+} from "@/lib/organization-access";
 import { prisma } from "@/lib/prisma";
 
 export default async function MeetingDetailPage({
@@ -16,12 +20,19 @@ export default async function MeetingDetailPage({
     notFound();
   }
 
+  const access = await getUserMeetingAccess(userId);
+
+  if (!access) {
+    notFound();
+  }
+
   const meeting = await prisma.meeting.findFirst({
     where: {
-      id,
-      user: { clerkId: userId }
+      AND: [{ id }, buildAccessibleMeetingWhere(access)]
     },
     include: {
+      organization: true,
+      team: true,
       actionItems: true,
       decisions: true,
       topics: true,
@@ -33,6 +44,13 @@ export default async function MeetingDetailPage({
     notFound();
   }
 
+  const canDelete =
+    meeting.userId === access.user.id ||
+    Boolean(
+      meeting.organizationId &&
+        access.orgWideOrganizationIds.includes(meeting.organizationId)
+    );
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -43,8 +61,12 @@ export default async function MeetingDetailPage({
           <p className="mt-2 text-sm text-slate-500">
             Created {meeting.createdAt.toLocaleString()}
           </p>
+          <p className="mt-1 text-sm text-slate-500">
+            {meeting.organization?.name ?? "No organization"} /{" "}
+            {meeting.team?.name ?? "No team"}
+          </p>
         </div>
-        <DeleteMeetingButton meetingId={meeting.id} />
+        {canDelete ? <DeleteMeetingButton meetingId={meeting.id} /> : null}
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
