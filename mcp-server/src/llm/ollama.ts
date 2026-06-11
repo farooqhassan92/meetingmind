@@ -30,17 +30,63 @@ function asNullableString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function cleanText(value: string): string {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+
+    if (typeof parsed === "string") {
+      return cleanText(parsed);
+    }
+
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => cleanText(String(item))).join("; ");
+    }
+
+    const record = asRecord(parsed);
+    const text =
+      record.content ??
+      record.value ??
+      record.decision ??
+      record.commitment ??
+      record.question ??
+      record.title ??
+      record.description ??
+      record.summary ??
+      record.text;
+
+    return typeof text === "string" && text.trim() ? cleanText(text) : trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
+function asCleanString(value: unknown, fallback = "") {
+  return cleanText(asString(value, fallback));
+}
+
+function asCleanNullableString(value: unknown) {
+  const text = asNullableString(value);
+
+  return text ? cleanText(text) : null;
+}
+
 function asArray(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
 function stringifyListItem(value: unknown) {
   if (typeof value === "string") {
-    return value;
+    return cleanText(value);
   }
 
   const record = asRecord(value);
-  return asString(
+  return asCleanString(
     record.content ??
       record.value ??
       record.decision ??
@@ -143,7 +189,7 @@ function normalizeMeetingAnalysis(
 
   const actionItems = asArray(record.actionItems).map((item) => {
     const itemRecord = asRecord(item);
-    const title = asString(
+    const title = asCleanString(
       itemRecord.title ?? itemRecord.task ?? itemRecord.action,
       stringifyListItem(item)
     );
@@ -151,9 +197,9 @@ function normalizeMeetingAnalysis(
     return {
       title,
       assignee:
-        asNullableString(itemRecord.assignee ?? itemRecord.owner) ??
+        asCleanNullableString(itemRecord.assignee ?? itemRecord.owner) ??
         inferAssignee(title, sentences),
-      deadline: asNullableString(
+      deadline: asCleanNullableString(
         itemRecord.deadline ?? itemRecord.dueDate ?? itemRecord.due
       )
     };
@@ -163,19 +209,19 @@ function normalizeMeetingAnalysis(
     const topicRecord = asRecord(topic);
 
     return {
-      title: asString(
+      title: asCleanString(
         topicRecord.title ?? topicRecord.name ?? topicRecord.topic,
         stringifyListItem(topic)
       ),
-      notes: asNullableString(
+      notes: asCleanNullableString(
         topicRecord.notes ?? topicRecord.summary ?? topicRecord.description
       )
     };
   });
 
   const normalized = meetingAnalysisSchema.parse({
-    title: asString(record.title, "Meeting notes"),
-    summary: asString(record.summary, "No summary returned."),
+    title: asCleanString(record.title, "Meeting notes"),
+    summary: asCleanString(record.summary, "No summary returned."),
     actionItems,
     decisions: asArray(record.decisions).map(stringifyDecision),
     topics,

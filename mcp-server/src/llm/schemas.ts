@@ -81,5 +81,6 @@ export const analysisSystemPrompt = [
   "Return only factual information supported by the transcript.",
   "Use null when an assignee, deadline, or topic note is not stated.",
   "Keep summaries concise and action item titles clear.",
+  "Every string value must be plain human-readable text, never nested JSON, markdown tables, or code blocks.",
   "For followUpQuestions, include explicit questions from the transcript and convert stated open issues or follow-up question lists into clear question sentences."
 ].join(" ");
