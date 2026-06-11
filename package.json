@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "mcp:dev": "tsx mcp-server/src/index.ts",
+    "chunks:backfill": "tsx scripts/backfill-meeting-chunks.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },
