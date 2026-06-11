@@ -4,18 +4,24 @@ import {
   CalendarDays,
   CheckCircle2,
   ListChecks,
-  Plus,
-  Search,
-  X
+  Plus
 } from "lucide-react";
 import Link from "next/link";
-import type { Prisma } from "@prisma/client";
 import type { Route } from "next";
 import { redirect } from "next/navigation";
 
-import { DeleteMeetingButton } from "@/components/delete-meeting-button";
+import { DashboardFilters } from "@/components/dashboard-filters";
+import { MeetingHistoryList } from "@/components/meeting-history-list";
+import { SemanticSearchPanel } from "@/components/semantic-search-panel";
 import { Button } from "@/components/ui/button";
-import { Tooltip } from "@/components/ui/tooltip";
+import {
+  buildMeetingFilterWhere,
+  dateInputValue,
+  dateRangeOptions,
+  getDateFilter,
+  MEETING_HISTORY_PAGE_SIZE,
+  type MeetingHistoryCard
+} from "@/lib/meeting-history";
 import {
   buildAccessibleMeetingWhere,
   ensureAppUser,
@@ -34,66 +40,6 @@ type DashboardPageProps = {
   }>;
 };
 
-const dateRangeOptions = [
-  { value: "all", label: "All time" },
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "this-month", label: "This month" },
-  { value: "custom", label: "Custom range" }
-];
-
-function dateInputValue(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function parseDateInput(value: string | undefined, boundary: "start" | "end") {
-  if (!value) {
-    return undefined;
-  }
-
-  const date = new Date(`${value}T00:00:00.000Z`);
-
-  if (Number.isNaN(date.getTime())) {
-    return undefined;
-  }
-
-  if (boundary === "end") {
-    date.setUTCHours(23, 59, 59, 999);
-  }
-
-  return date;
-}
-
-function getDateFilter(range: string, from?: string, to?: string) {
-  const now = new Date();
-  const selectedRange = dateRangeOptions.some((option) => option.value === range)
-    ? range
-    : "all";
-
-  if (selectedRange === "custom" || from || to) {
-    const gte = parseDateInput(from, "start");
-    const lte = parseDateInput(to, "end");
-
-    return gte || lte ? { gte, lte } : undefined;
-  }
-
-  if (selectedRange === "7d" || selectedRange === "30d") {
-    const days = selectedRange === "7d" ? 7 : 30;
-    const gte = new Date(now);
-    gte.setDate(gte.getDate() - days);
-
-    return { gte };
-  }
-
-  if (selectedRange === "this-month") {
-    return {
-      gte: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-    };
-  }
-
-  return undefined;
-}
-
 export default async function DashboardPage({
   searchParams
 }: DashboardPageProps) {
@@ -101,63 +47,11 @@ export default async function DashboardPage({
   const query = params?.query?.trim() ?? "";
   const range = params?.range ?? "all";
   const from = params?.from ?? "";
-  const organizationId = params?.organizationId ?? "";
-  const teamId = params?.teamId ?? "";
+  const requestedOrganizationId = params?.organizationId ?? "";
+  const requestedTeamId = params?.teamId ?? "";
   const to = params?.to ?? "";
   const dateFilter = getDateFilter(range, from, to);
-  const filterWhere: Prisma.MeetingWhereInput = {
-    ...(dateFilter ? { createdAt: dateFilter } : {}),
-    ...(query
-      ? {
-          OR: [
-            { title: { contains: query, mode: "insensitive" } },
-            { summary: { contains: query, mode: "insensitive" } },
-            { transcript: { contains: query, mode: "insensitive" } },
-            {
-              actionItems: {
-                some: {
-                  title: { contains: query, mode: "insensitive" }
-                }
-              }
-            },
-            {
-              decisions: {
-                some: {
-                  content: { contains: query, mode: "insensitive" }
-                }
-              }
-            },
-            {
-              topics: {
-                some: {
-                  OR: [
-                    {
-                      title: {
-                        contains: query,
-                        mode: "insensitive"
-                      }
-                    },
-                    {
-                      notes: {
-                        contains: query,
-                        mode: "insensitive"
-                      }
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              followUpQuestions: {
-                some: {
-                  question: { contains: query, mode: "insensitive" }
-                }
-              }
-            }
-          ]
-        }
-      : {})
-  };
+  const filterWhere = buildMeetingFilterWhere({ dateFilter, query });
   const { userId } = await auth();
   const clerkUser = userId ? await currentUser() : null;
 
@@ -177,55 +71,107 @@ export default async function DashboardPage({
   if (userId && access && access.memberships.length === 0) {
     redirect("/onboarding" as Route);
   }
-  const selectedOrganizationId = organizationId || undefined;
-  const selectedTeamId = teamId || undefined;
+  const organizations = access?.organizations ?? [];
+  const selectedOrganization = requestedOrganizationId
+    ? organizations.find(
+        (organization) => organization.id === requestedOrganizationId
+      ) ?? null
+    : null;
+  const teams = selectedOrganization
+    ? selectedOrganization.teams
+    : organizations.flatMap((organization) => organization.teams);
+  const selectedTeam = requestedTeamId
+    ? teams.find((team) => team.id === requestedTeamId) ?? null
+    : null;
+  const selectedOrganizationId = selectedOrganization?.id;
+  const selectedTeamId = selectedTeam?.id;
+  const semanticFrom = dateFilter?.gte ? dateInputValue(dateFilter.gte) : from;
+  const semanticTo = dateFilter?.lte ? dateInputValue(dateFilter.lte) : to;
   const accessibleWhere = access
     ? buildAccessibleMeetingWhere(access, {
         organizationId: selectedOrganizationId,
         teamId: selectedTeamId
       })
     : { id: "__no_access__" };
-  const meetings = access
+  const meetingWhere = {
+    AND: [accessibleWhere, filterWhere]
+  };
+  const rawMeetings = access
     ? await prisma.meeting.findMany({
-        where: {
-          AND: [accessibleWhere, filterWhere]
-        },
-        orderBy: { createdAt: "desc" },
-        include: {
-          organization: true,
-          team: true,
+        where: meetingWhere,
+        take: MEETING_HISTORY_PAGE_SIZE + 1,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: {
+          id: true,
+          createdAt: true,
+          organizationId: true,
+          summary: true,
+          title: true,
+          userId: true,
+          organization: {
+            select: { name: true }
+          },
+          team: {
+            select: { name: true }
+          },
           _count: {
             select: { actionItems: true, decisions: true }
           }
         }
       })
     : [];
-  const organizations = access?.organizations ?? [];
-  const selectedOrganization = selectedOrganizationId
-    ? organizations.find((organization) => organization.id === selectedOrganizationId)
-    : null;
-  const teams = selectedOrganization
-    ? selectedOrganization.teams
-    : organizations.flatMap((organization) => organization.teams);
+  const hasMoreMeetings = rawMeetings.length > MEETING_HISTORY_PAGE_SIZE;
+  const meetings = hasMoreMeetings
+    ? rawMeetings.slice(0, MEETING_HISTORY_PAGE_SIZE)
+    : rawMeetings;
+  const teamLabel = (team: (typeof teams)[number]) => {
+    const organization = organizations.find(
+      (candidate) => candidate.id === team.organizationId
+    );
+
+    return selectedOrganization
+      ? team.name
+      : `${organization ? organization.name : "Unknown org"} / ${team.name}`;
+  };
   const hasActiveFilters = Boolean(
-    query || range !== "all" || from || to || organizationId || teamId
+    query || range !== "all" || from || to || selectedOrganizationId || selectedTeamId
   );
-  const totalActionItems = meetings.reduce(
-    (count, meeting) => count + meeting._count.actionItems,
-    0
-  );
-  const totalDecisions = meetings.reduce(
-    (count, meeting) => count + meeting._count.decisions,
-    0
-  );
-  const visibleTeamCount = new Set(
-    meetings.map((meeting) => meeting.teamId).filter(Boolean)
-  ).size;
+  const [totalMeetingCount, totalActionItems, totalDecisions, visibleTeams] =
+    access
+      ? await Promise.all([
+          prisma.meeting.count({ where: meetingWhere }),
+          prisma.actionItem.count({ where: { meeting: meetingWhere } }),
+          prisma.decision.count({ where: { meeting: meetingWhere } }),
+          prisma.meeting.findMany({
+            where: {
+              AND: [meetingWhere, { teamId: { not: null } }]
+            },
+            distinct: ["teamId"],
+            select: { teamId: true }
+          })
+        ])
+      : [0, 0, 0, []];
+  const historyCards: MeetingHistoryCard[] = meetings.map((meeting) => ({
+    actionItemCount: meeting._count.actionItems,
+    canDelete:
+      meeting.userId === access?.user.id ||
+      Boolean(
+        meeting.organizationId &&
+          access?.orgWideOrganizationIds.includes(meeting.organizationId)
+      ),
+    createdAt: meeting.createdAt.toISOString(),
+    decisionCount: meeting._count.decisions,
+    id: meeting.id,
+    organizationName: meeting.organization?.name ?? null,
+    summary: meeting.summary,
+    teamName: meeting.team?.name ?? null,
+    title: meeting.title
+  }));
   const summaryStats = [
     {
       icon: CalendarDays,
       label: "Meetings",
-      value: meetings.length
+      value: totalMeetingCount
     },
     {
       icon: ListChecks,
@@ -240,15 +186,9 @@ export default async function DashboardPage({
     {
       icon: Building2,
       label: "Teams",
-      value: visibleTeamCount
+      value: visibleTeams.length
     }
   ];
-  const canDeleteMeeting = (meeting: (typeof meetings)[number]) =>
-    meeting.userId === access?.user.id ||
-    Boolean(
-      meeting.organizationId &&
-        access?.orgWideOrganizationIds.includes(meeting.organizationId)
-    );
 
   return (
     <section className="space-y-6">
@@ -290,116 +230,25 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      <form
-        action="/dashboard"
-        className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-      >
-        <div className="grid gap-3 lg:grid-cols-[1.2fr_0.9fr_0.9fr_0.8fr]">
-          <label className="relative" htmlFor="meeting-search">
-            <span className="mb-2 block text-sm font-medium text-slate-700">
-              Search
-            </span>
-            <Search className="pointer-events-none absolute bottom-3 left-3 h-4 w-4 text-slate-400" />
-            <input
-              className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-950 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-              defaultValue={query}
-              id="meeting-search"
-              name="query"
-              placeholder="Search meetings, decisions, topics..."
-              type="search"
-            />
-          </label>
+      <DashboardFilters
+        dateRangeOptions={dateRangeOptions}
+        from={from}
+        hasActiveFilters={hasActiveFilters}
+        maxDate={dateInputValue(new Date())}
+        organizations={organizations}
+        query={query}
+        range={range}
+        selectedOrganizationId={selectedOrganizationId ?? ""}
+        selectedTeamId={selectedTeamId ?? ""}
+        to={to}
+      />
 
-          <label className="text-sm font-medium text-slate-700">
-            <Tooltip content="Organizations are company workspaces that own teams, meetings, and members.">
-              <span>Organization</span>
-            </Tooltip>
-            <select
-              className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-              defaultValue={organizationId}
-              name="organizationId"
-            >
-              <option value="">All organizations</option>
-              {organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>
-                  {organization.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm font-medium text-slate-700">
-            <Tooltip content="Teams limit meeting access and help narrow search results to the right group.">
-              <span>Team</span>
-            </Tooltip>
-            <select
-              className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-              defaultValue={teamId}
-              name="teamId"
-            >
-              <option value="">All teams</option>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm font-medium text-slate-700">
-            <Tooltip content="Date filters search by when meetings were created.">
-              <span>Date</span>
-            </Tooltip>
-            <select
-              className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-              defaultValue={range}
-              name="range"
-            >
-              {dateRangeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
-          <label className="text-sm font-medium text-slate-700">
-            From
-            <input
-              className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-              defaultValue={from}
-              max={to || undefined}
-              name="from"
-              type="date"
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            To
-            <input
-              className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-              defaultValue={to}
-              max={dateInputValue(new Date())}
-              min={from || undefined}
-              name="to"
-              type="date"
-            />
-          </label>
-          <Button className="w-full sm:w-auto" type="submit" variant="outline">
-            <Search className="h-4 w-4" />
-            Apply filters
-          </Button>
-          {hasActiveFilters ? (
-            <Button asChild className="w-full sm:w-auto" type="button" variant="outline">
-              <Link href="/dashboard">
-                <X className="h-4 w-4" />
-                Clear
-              </Link>
-            </Button>
-          ) : null}
-        </div>
-      </form>
+      <SemanticSearchPanel
+        from={semanticFrom || undefined}
+        organizationId={selectedOrganizationId}
+        teamId={selectedTeamId}
+        to={semanticTo || undefined}
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -412,16 +261,17 @@ export default async function DashboardPage({
         </div>
         {hasActiveFilters ? (
           <span className="rounded-md bg-teal-50 px-3 py-2 text-sm font-medium text-teal-800">
-            {meetings.length} matching result{meetings.length === 1 ? "" : "s"}
+            {totalMeetingCount} matching result
+            {totalMeetingCount === 1 ? "" : "s"}
           </span>
         ) : null}
       </div>
-      {meetings.length > 0 ? (
+      {historyCards.length > 0 ? (
         <div className="space-y-3">
           {hasActiveFilters ? (
             <p className="text-sm text-slate-600">
-              Showing {meetings.length} result
-              {meetings.length === 1 ? "" : "s"}
+              Showing {historyCards.length} of {totalMeetingCount} result
+              {totalMeetingCount === 1 ? "" : "s"}
               {query ? (
                 <>
                   {" "}
@@ -453,75 +303,56 @@ export default async function DashboardPage({
                   </span>
                 </>
               ) : null}
-              {organizationId ? (
+              {selectedOrganizationId ? (
                 <>
                   {" "}
                   in{" "}
                   <span className="font-medium text-slate-950">
-                    {selectedOrganization?.name ?? "selected organization"}
+                    {selectedOrganization
+                      ? selectedOrganization.name
+                      : "selected organization"}
                   </span>
                 </>
               ) : null}
-              {teamId ? (
+              {selectedTeamId ? (
                 <>
                   {" "}
                   for{" "}
                   <span className="font-medium text-slate-950">
-                    {teams.find((team) => team.id === teamId)?.name ??
-                      "selected team"}
+                    {selectedTeam ? teamLabel(selectedTeam) : "selected team"}
                   </span>
                 </>
               ) : null}
               .
             </p>
           ) : null}
-          {meetings.map((meeting) => (
-            <div
-              className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-teal-200"
-              key={meeting.id}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <Link
-                    className="text-lg font-semibold text-slate-950 transition-colors hover:text-teal-700"
-                    href={`/dashboard/${meeting.id}`}
-                  >
-                    {meeting.title}
-                  </Link>
-                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">
-                    {meeting.summary}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
-                    <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-600">
-                      {meeting.organization?.name ?? "No organization"}
-                    </span>
-                    <span className="rounded-md bg-teal-50 px-2 py-1 text-teal-700">
-                      {meeting.team?.name ?? "No team"}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end">
-                  <span className="text-sm text-slate-500">
-                    {meeting.createdAt.toLocaleDateString()}
-                  </span>
-                  {canDeleteMeeting(meeting) ? (
-                    <DeleteMeetingButton
-                      className="w-full sm:w-auto"
-                      meetingId={meeting.id}
-                    />
-                  ) : null}
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
-                <span className="rounded-md border border-slate-200 px-2 py-1">
-                  {meeting._count.actionItems} action items
-                </span>
-                <span className="rounded-md border border-slate-200 px-2 py-1">
-                  {meeting._count.decisions} decisions
-                </span>
-              </div>
-            </div>
-          ))}
+          <MeetingHistoryList
+            emptyDescription={
+              hasActiveFilters
+                ? "Try clearing filters or searching a broader term."
+                : "Create your first meeting analysis to start building searchable history."
+            }
+            emptyTitle={hasActiveFilters ? "No matching meetings" : "No meetings yet"}
+            filters={{
+              from,
+              organizationId: selectedOrganizationId,
+              query,
+              range,
+              teamId: selectedTeamId,
+              to
+            }}
+            hasMore={hasMoreMeetings}
+            initialMeetings={historyCards}
+            key={[
+              query,
+              range,
+              from,
+              to,
+              selectedOrganizationId ?? "",
+              selectedTeamId ?? ""
+            ].join("|")}
+            pageSize={MEETING_HISTORY_PAGE_SIZE}
+          />
         </div>
       ) : (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
