@@ -12,6 +12,20 @@ const acceptInviteSchema = z.object({
   token: z.string().min(1)
 });
 
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function describeEmail(email: string) {
+  const [local, domain] = normalizeEmail(email).split("@");
+
+  if (!local || !domain) {
+    return email;
+  }
+
+  return `${local.slice(0, 3)}***@${domain}`;
+}
+
 export async function acceptInvitationAction(formData: FormData) {
   const parsed = acceptInviteSchema.parse({
     token: formData.get("token")
@@ -24,6 +38,10 @@ export async function acceptInvitationAction(formData: FormData) {
 
   const clerkUser = await currentUser();
   const email = clerkUser?.primaryEmailAddress?.emailAddress;
+  const userEmails =
+    clerkUser?.emailAddresses
+      .map((address) => address.emailAddress)
+      .filter(Boolean) ?? [];
 
   if (!email) {
     throw new Error("Signed-in user is missing a primary email address.");
@@ -39,7 +57,9 @@ export async function acceptInvitationAction(formData: FormData) {
   });
 
   if (!invitation) {
-    throw new Error("Invitation not found.");
+    throw new Error(
+      "Invitation not found. It may have been cancelled or replaced. Ask your CEO for a new invite."
+    );
   }
 
   if (invitation.acceptedAt) {
@@ -50,8 +70,13 @@ export async function acceptInvitationAction(formData: FormData) {
     throw new Error("This invitation has expired.");
   }
 
-  if (invitation.email.toLowerCase() !== email.toLowerCase()) {
-    throw new Error("This invitation was sent to a different email address.");
+  const invitedEmail = normalizeEmail(invitation.email);
+  const signedInEmails = new Set(userEmails.map(normalizeEmail));
+
+  if (!signedInEmails.has(invitedEmail)) {
+    throw new Error(
+      `This invite was sent to ${describeEmail(invitation.email)}, but you are signed in with ${describeEmail(email)}. Please sign out and use the invited email.`
+    );
   }
 
   await prisma.$transaction(async (tx) => {

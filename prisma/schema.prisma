@@ -98,6 +98,9 @@ model OrganizationInvitation {
   teamRole         TeamRole?
   token            String           @unique
   expiresAt        DateTime
+  emailSentAt      DateTime?
+  emailMessageId   String?
+  emailError       String?          @db.Text
   acceptedAt       DateTime?
   invitedById      String
   acceptedById     String?

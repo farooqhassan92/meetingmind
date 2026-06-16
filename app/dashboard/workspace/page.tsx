@@ -16,6 +16,7 @@ import type { Prisma } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import { WorkspaceNoticeToast } from "@/components/workspace-notice-toast";
 import {
   ensureAppUser,
   getUserMeetingAccess
@@ -32,12 +33,14 @@ import {
   createTeamAction,
   removeOrganizationMemberAction,
   removeTeamMemberAction,
+  resendInvitationEmailAction,
   restoreTeamAction,
   updateOrganizationMemberRoleAction
 } from "./actions";
 
 type WorkspacePageProps = {
   searchParams?: Promise<{
+    notice?: string;
     organizationId?: string;
     tab?: string;
   }>;
@@ -86,6 +89,18 @@ function getWorkspaceInvitations(organizationId: string) {
     include: { team: true },
     orderBy: { createdAt: "desc" }
   });
+}
+
+function invitationEmailStatus(invitation: WorkspaceInvitation) {
+  if (invitation.emailSentAt) {
+    return `Email sent ${invitation.emailSentAt.toLocaleString()}`;
+  }
+
+  if (invitation.emailError) {
+    return "Email failed";
+  }
+
+  return "Email pending";
 }
 
 export default async function WorkspacePage({
@@ -148,6 +163,8 @@ export default async function WorkspacePage({
 
   return (
     <section className="space-y-6">
+      <WorkspaceNoticeToast notice={params?.notice} />
+
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold text-slate-950">Workspace</h1>
@@ -787,23 +804,59 @@ function InvitationsPanel({
                     <p className="mt-2 break-all text-xs text-teal-700">
                       /invite/{invitation.token}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      <span
+                        className={
+                          invitation.emailSentAt
+                            ? "rounded-md bg-teal-50 px-2 py-1 font-medium text-teal-700"
+                            : invitation.emailError
+                              ? "rounded-md bg-red-50 px-2 py-1 font-medium text-red-700"
+                              : "rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-600"
+                        }
+                      >
+                        {invitationEmailStatus(invitation)}
+                      </span>
+                      {invitation.emailError ? (
+                        <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-600">
+                          {invitation.emailError}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 {canInvite ? (
-                  <form action={cancelInvitationAction}>
-                    <input
-                      name="organizationId"
-                      type="hidden"
-                      value={organizationId}
-                    />
-                    <input
-                      name="invitationId"
-                      type="hidden"
-                      value={invitation.id}
-                    />
-                    <Button className="w-full sm:w-auto" type="submit" variant="destructive">
-                      Cancel invite
-                    </Button>
-                  </form>
+                  <div className="grid w-full gap-2 sm:w-auto sm:flex sm:flex-wrap">
+                    <form action={resendInvitationEmailAction}>
+                      <input
+                        name="organizationId"
+                        type="hidden"
+                        value={organizationId}
+                      />
+                      <input
+                        name="invitationId"
+                        type="hidden"
+                        value={invitation.id}
+                      />
+                      <Button className="w-full sm:w-auto" type="submit" variant="outline">
+                        <Mail className="h-4 w-4" />
+                        Resend email
+                      </Button>
+                    </form>
+                    <form action={cancelInvitationAction}>
+                      <input
+                        name="organizationId"
+                        type="hidden"
+                        value={organizationId}
+                      />
+                      <input
+                        name="invitationId"
+                        type="hidden"
+                        value={invitation.id}
+                      />
+                      <Button className="w-full sm:w-auto" type="submit" variant="destructive">
+                        Cancel invite
+                      </Button>
+                    </form>
+                  </div>
                 ) : null}
                 </div>
               </div>

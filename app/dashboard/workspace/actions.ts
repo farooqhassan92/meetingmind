@@ -8,6 +8,7 @@ import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { sendInvitationEmail } from "@/lib/invitation-email";
 import {
   createOrganizationForUser,
   ensureAppUser,
@@ -36,7 +37,7 @@ const memberSchema = z.object({
 
 const inviteSchema = z.object({
   organizationId: z.string().min(1),
-  email: z.string().trim().email(),
+  email: z.string().trim().toLowerCase().email(),
   organizationRole: z.enum(["CEO", "MEMBER"]),
   teamId: z.string().optional(),
   teamRole: z.enum(["MANAGER", "MEMBER"]).optional()
@@ -65,6 +66,11 @@ const removeOrganizationMemberSchema = z.object({
 });
 
 const cancelInvitationSchema = z.object({
+  invitationId: z.string().min(1),
+  organizationId: z.string().min(1)
+});
+
+const resendInvitationSchema = z.object({
   invitationId: z.string().min(1),
   organizationId: z.string().min(1)
 });
@@ -130,6 +136,24 @@ function canManageTeam(
   );
 }
 
+function workspacePath({
+  notice,
+  organizationId,
+  tab
+}: {
+  notice: string;
+  organizationId: string;
+  tab: "overview" | "teams" | "members" | "invites";
+}) {
+  const params = new URLSearchParams({
+    notice,
+    organizationId,
+    tab
+  });
+
+  return `/dashboard/workspace?${params.toString()}` as Route;
+}
+
 async function assertCanChangeOrganizationMember(
   organizationId: string,
   userId: string,
@@ -162,6 +186,44 @@ async function assertCanChangeOrganizationMember(
   }
 }
 
+async function sendAndRecordInvitationEmail(invitationId: string) {
+  const invitation = await prisma.organizationInvitation.findUnique({
+    where: { id: invitationId },
+    include: {
+      invitedBy: true,
+      organization: true,
+      team: true
+    }
+  });
+
+  if (!invitation) {
+    throw new Error("Invitation not found.");
+  }
+
+  const result = await sendInvitationEmail({
+    email: invitation.email,
+    invitedByName: invitation.invitedBy.name ?? invitation.invitedBy.email,
+    organizationName: invitation.organization.name,
+    organizationRole: invitation.organizationRole,
+    teamName: invitation.team?.name ?? null,
+    teamRole: invitation.teamRole,
+    token: invitation.token
+  });
+
+  await prisma.organizationInvitation.update({
+    where: { id: invitation.id },
+    data: result.sent
+      ? {
+          emailError: null,
+          emailMessageId: result.messageId,
+          emailSentAt: new Date()
+        }
+      : {
+          emailError: result.error
+        }
+  });
+}
+
 export async function createOrganizationAction(formData: FormData) {
   const user = await requireProfile();
   const parsed = organizationSchema.parse({
@@ -173,7 +235,13 @@ export async function createOrganizationAction(formData: FormData) {
   revalidatePath("/dashboard/new");
   revalidatePath("/dashboard/workspace");
   revalidatePath("/onboarding");
-  redirect(`/dashboard/workspace?organizationId=${organization.id}`);
+  redirect(
+    workspacePath({
+      notice: "organization-created",
+      organizationId: organization.id,
+      tab: "overview"
+    })
+  );
 }
 
 export async function createTeamAction(formData: FormData) {
@@ -197,6 +265,13 @@ export async function createTeamAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/new");
   revalidatePath("/dashboard/workspace");
+  redirect(
+    workspacePath({
+      notice: "team-created",
+      organizationId: parsed.organizationId,
+      tab: "teams"
+    })
+  );
 }
 
 export async function archiveTeamAction(formData: FormData) {
@@ -228,6 +303,13 @@ export async function archiveTeamAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/new");
   revalidatePath("/dashboard/workspace");
+  redirect(
+    workspacePath({
+      notice: "team-archived",
+      organizationId: team.organizationId,
+      tab: "teams"
+    })
+  );
 }
 
 export async function restoreTeamAction(formData: FormData) {
@@ -251,6 +333,13 @@ export async function restoreTeamAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/new");
   revalidatePath("/dashboard/workspace");
+  redirect(
+    workspacePath({
+      notice: "team-restored",
+      organizationId: team.organizationId,
+      tab: "teams"
+    })
+  );
 }
 
 export async function addExistingMemberAction(formData: FormData) {
@@ -299,6 +388,13 @@ export async function addExistingMemberAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/workspace");
+  redirect(
+    workspacePath({
+      notice: "existing-member-added",
+      organizationId: parsed.organizationId,
+      tab: "members"
+    })
+  );
 }
 
 export async function createInvitationAction(formData: FormData) {
@@ -329,7 +425,7 @@ export async function createInvitationAction(formData: FormData) {
     }
   }
 
-  await prisma.organizationInvitation.create({
+  const invitation = await prisma.organizationInvitation.create({
     data: {
       organizationId: parsed.organizationId,
       email: parsed.email,
@@ -342,7 +438,52 @@ export async function createInvitationAction(formData: FormData) {
     }
   });
 
+  await sendAndRecordInvitationEmail(invitation.id);
+
   revalidatePath("/dashboard/workspace");
+  redirect(
+    workspacePath({
+      notice: "invite-created",
+      organizationId: parsed.organizationId,
+      tab: "invites"
+    })
+  );
+}
+
+export async function resendInvitationEmailAction(formData: FormData) {
+  const access = await requireAccess();
+  const parsed = resendInvitationSchema.parse({
+    invitationId: formData.get("invitationId"),
+    organizationId: formData.get("organizationId")
+  });
+
+  if (!isCeo(access, parsed.organizationId)) {
+    throw new Error("Only the CEO can resend invitations.");
+  }
+
+  const invitation = await prisma.organizationInvitation.findFirst({
+    where: {
+      acceptedAt: null,
+      id: parsed.invitationId,
+      organizationId: parsed.organizationId
+    },
+    select: { id: true }
+  });
+
+  if (!invitation) {
+    throw new Error("Invitation not found.");
+  }
+
+  await sendAndRecordInvitationEmail(invitation.id);
+
+  revalidatePath("/dashboard/workspace");
+  redirect(
+    workspacePath({
+      notice: "invite-resent",
+      organizationId: parsed.organizationId,
+      tab: "invites"
+    })
+  );
 }
 
 export async function assignTeamMemberAction(formData: FormData) {
@@ -403,6 +544,13 @@ export async function assignTeamMemberAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/new");
   revalidatePath("/dashboard/workspace");
+  redirect(
+    workspacePath({
+      notice: "team-member-assigned",
+      organizationId: team.organizationId,
+      tab: "teams"
+    })
+  );
 }
 
 export async function removeTeamMemberAction(formData: FormData) {
@@ -416,6 +564,15 @@ export async function removeTeamMemberAction(formData: FormData) {
     throw new Error("You cannot manage this team.");
   }
 
+  const team = await prisma.team.findUnique({
+    where: { id: parsed.teamId },
+    select: { organizationId: true }
+  });
+
+  if (!team) {
+    throw new Error("Team not found.");
+  }
+
   await prisma.teamMember.deleteMany({
     where: {
       teamId: parsed.teamId,
@@ -426,6 +583,13 @@ export async function removeTeamMemberAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/new");
   revalidatePath("/dashboard/workspace");
+  redirect(
+    workspacePath({
+      notice: "team-member-removed",
+      organizationId: team.organizationId,
+      tab: "teams"
+    })
+  );
 }
 
 export async function updateOrganizationMemberRoleAction(formData: FormData) {
@@ -460,6 +624,13 @@ export async function updateOrganizationMemberRoleAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/workspace");
+  redirect(
+    workspacePath({
+      notice: "member-role-updated",
+      organizationId: parsed.organizationId,
+      tab: "members"
+    })
+  );
 }
 
 export async function removeOrganizationMemberAction(formData: FormData) {
@@ -502,6 +673,13 @@ export async function removeOrganizationMemberAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/new");
   revalidatePath("/dashboard/workspace");
+  redirect(
+    workspacePath({
+      notice: "member-removed",
+      organizationId: parsed.organizationId,
+      tab: "members"
+    })
+  );
 }
 
 export async function cancelInvitationAction(formData: FormData) {
@@ -525,4 +703,11 @@ export async function cancelInvitationAction(formData: FormData) {
 
   revalidatePath("/dashboard/workspace");
   revalidatePath("/onboarding");
+  redirect(
+    workspacePath({
+      notice: "invite-cancelled",
+      organizationId: parsed.organizationId,
+      tab: "invites"
+    })
+  );
 }
