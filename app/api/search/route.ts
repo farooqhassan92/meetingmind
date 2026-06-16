@@ -57,9 +57,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const selectedOrganization = body.data.organizationId
+    ? access.organizations.find(
+        (organization) => organization.id === body.data.organizationId
+      )
+    : null;
+  const teams = selectedOrganization
+    ? selectedOrganization.teams.filter((team) => !team.archivedAt)
+    : access.organizations
+        .flatMap((organization) => organization.teams)
+        .filter((team) => !team.archivedAt);
+  const selectedTeam = body.data.teamId
+    ? teams.find((team) => team.id === body.data.teamId)
+    : null;
+  const selectedOrganizationId = selectedOrganization?.id;
+  const selectedTeamId = selectedTeam?.id;
   const accessibleWhere = buildAccessibleMeetingWhere(access, {
-    organizationId: body.data.organizationId,
-    teamId: body.data.teamId
+    organizationId: selectedOrganizationId,
+    teamId: selectedTeamId
   });
 
   if ("id" in accessibleWhere && accessibleWhere.id === "__no_access__") {
@@ -73,8 +88,8 @@ export async function POST(request: Request) {
         accessibleOrganizationIds: access.ceoOrganizationIds,
         accessibleTeamIds: access.teamIds,
         from: parseDate(body.data.from, "start"),
-        organizationId: body.data.organizationId,
-        teamId: body.data.teamId,
+        organizationId: selectedOrganizationId,
+        teamId: selectedTeamId,
         to: parseDate(body.data.to, "end")
       },
       body.data.limit ?? 10

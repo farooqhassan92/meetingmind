@@ -98,8 +98,10 @@ export async function GET(request: Request) {
       )
     : null;
   const teams = selectedOrganization
-    ? selectedOrganization.teams
-    : organizations.flatMap((organization) => organization.teams);
+    ? selectedOrganization.teams.filter((team) => !team.archivedAt)
+    : organizations
+        .flatMap((organization) => organization.teams)
+        .filter((team) => !team.archivedAt);
   const selectedTeam = requestedTeamId
     ? teams.find((team) => team.id === requestedTeamId)
     : null;

@@ -24,6 +24,10 @@ const teamSchema = z.object({
   name: z.string().trim().min(2).max(80)
 });
 
+const teamArchiveSchema = z.object({
+  teamId: z.string().min(1)
+});
+
 const memberSchema = z.object({
   organizationId: z.string().min(1),
   email: z.string().trim().email(),
@@ -120,6 +124,7 @@ function canManageTeam(
 
   return Boolean(
     team &&
+      !team.archivedAt &&
       (isCeo(access, team.organizationId) ||
         access.managedTeamIds.includes(team.id))
   );
@@ -194,6 +199,60 @@ export async function createTeamAction(formData: FormData) {
   revalidatePath("/dashboard/workspace");
 }
 
+export async function archiveTeamAction(formData: FormData) {
+  const access = await requireAccess();
+  const parsed = teamArchiveSchema.parse({
+    teamId: formData.get("teamId")
+  });
+  const team = access.organizations
+    .flatMap((organization) => organization.teams)
+    .find((candidate) => candidate.id === parsed.teamId);
+
+  if (!team || !isCeo(access, team.organizationId)) {
+    throw new Error("Only the CEO can archive teams.");
+  }
+
+  await prisma.$transaction([
+    prisma.team.update({
+      where: { id: parsed.teamId },
+      data: { archivedAt: new Date() }
+    }),
+    prisma.organizationInvitation.deleteMany({
+      where: {
+        teamId: parsed.teamId,
+        acceptedAt: null
+      }
+    })
+  ]);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/new");
+  revalidatePath("/dashboard/workspace");
+}
+
+export async function restoreTeamAction(formData: FormData) {
+  const access = await requireAccess();
+  const parsed = teamArchiveSchema.parse({
+    teamId: formData.get("teamId")
+  });
+  const team = access.organizations
+    .flatMap((organization) => organization.teams)
+    .find((candidate) => candidate.id === parsed.teamId);
+
+  if (!team || !isCeo(access, team.organizationId)) {
+    throw new Error("Only the CEO can restore teams.");
+  }
+
+  await prisma.team.update({
+    where: { id: parsed.teamId },
+    data: { archivedAt: null }
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/new");
+  revalidatePath("/dashboard/workspace");
+}
+
 export async function addExistingMemberAction(formData: FormData) {
   const access = await requireAccess();
   const parsed = memberSchema.parse({
@@ -261,7 +320,11 @@ export async function createInvitationAction(formData: FormData) {
       .flatMap((organization) => organization.teams)
       .find((candidate) => candidate.id === parsed.teamId);
 
-    if (!team || team.organizationId !== parsed.organizationId) {
+    if (
+      !team ||
+      team.organizationId !== parsed.organizationId ||
+      team.archivedAt
+    ) {
       throw new Error("Selected team does not belong to the organization.");
     }
   }
@@ -296,11 +359,15 @@ export async function assignTeamMemberAction(formData: FormData) {
 
   const team = await prisma.team.findUnique({
     where: { id: parsed.teamId },
-    select: { organizationId: true }
+    select: { archivedAt: true, organizationId: true }
   });
 
   if (!team) {
     throw new Error("Team not found.");
+  }
+
+  if (team.archivedAt) {
+    throw new Error("Archived teams cannot be changed.");
   }
 
   const member = await prisma.organizationMember.findUnique({

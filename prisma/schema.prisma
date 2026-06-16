@@ -38,6 +38,7 @@ model Team {
   id             String                   @id @default(cuid())
   organizationId String
   name           String
+  archivedAt     DateTime?
   organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   meetings       Meeting[]
   members        TeamMember[]
@@ -47,6 +48,7 @@ model Team {
 
   @@unique([organizationId, name])
   @@index([organizationId])
+  @@index([archivedAt])
 }
 
 model OrganizationMember {

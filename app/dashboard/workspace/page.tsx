@@ -1,10 +1,12 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import {
+  Archive,
   Building2,
   CalendarDays,
   Link2,
   Mail,
   Plus,
+  RotateCcw,
   Users
 } from "lucide-react";
 import Link from "next/link";
@@ -22,6 +24,7 @@ import { prisma } from "@/lib/prisma";
 
 import {
   addExistingMemberAction,
+  archiveTeamAction,
   assignTeamMemberAction,
   cancelInvitationAction,
   createInvitationAction,
@@ -29,6 +32,7 @@ import {
   createTeamAction,
   removeOrganizationMemberAction,
   removeTeamMemberAction,
+  restoreTeamAction,
   updateOrganizationMemberRoleAction
 } from "./actions";
 
@@ -129,8 +133,14 @@ export default async function WorkspacePage({
   const meetingCount = await prisma.meeting.count({
     where: { organizationId: selectedOrganization.id }
   });
+  const activeTeams = selectedOrganization.teams.filter(
+    (team) => !team.archivedAt
+  );
+  const archivedTeams = selectedOrganization.teams.filter(
+    (team) => team.archivedAt
+  );
   const manageableTeamIds = new Set([
-    ...selectedOrganization.teams
+    ...activeTeams
       .filter(() => isSelectedCeo)
       .map((team) => team.id),
     ...access.managedTeamIds
@@ -227,17 +237,19 @@ export default async function WorkspacePage({
           meetingCount={meetingCount}
           memberCount={members.length}
           organizationName={selectedOrganization.name}
-          teamCount={selectedOrganization.teams.length}
+          teamCount={activeTeams.length}
         />
       ) : null}
 
       {selectedTab === "teams" ? (
         <TeamsPanel
+          archivedTeams={archivedTeams}
           canCreateTeam={isSelectedCeo}
+          canRestoreTeam={isSelectedCeo}
           manageableTeamIds={manageableTeamIds}
           members={members}
           organizationId={selectedOrganization.id}
-          teams={selectedOrganization.teams}
+          teams={activeTeams}
         />
       ) : null}
 
@@ -254,7 +266,7 @@ export default async function WorkspacePage({
           canInvite={isSelectedCeo}
           invitations={invitations}
           organizationId={selectedOrganization.id}
-          teams={selectedOrganization.teams}
+          teams={activeTeams}
         />
       ) : null}
     </section>
@@ -321,13 +333,19 @@ function OverviewPanel({
 }
 
 function TeamsPanel({
+  archivedTeams,
   canCreateTeam,
+  canRestoreTeam,
   manageableTeamIds,
   members,
   organizationId,
   teams
 }: {
+  archivedTeams: NonNullable<
+    Awaited<ReturnType<typeof getUserMeetingAccess>>
+  >["organizations"][number]["teams"];
   canCreateTeam: boolean;
+  canRestoreTeam: boolean;
   manageableTeamIds: Set<string>;
   members: WorkspaceMember[];
   organizationId: string;
@@ -372,37 +390,48 @@ function TeamsPanel({
               </p>
             </div>
             {manageableTeamIds.has(team.id) ? (
-              <form
-                action={assignTeamMemberAction}
-              className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap"
-              >
-                <input name="teamId" type="hidden" value={team.id} />
-                <select
-                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-                  name="userId"
+              <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap">
+                <form
+                  action={assignTeamMemberAction}
+                  className="grid gap-2 sm:flex sm:flex-wrap"
                 >
-                  {members.map((member) => (
-                    <option key={member.userId} value={member.userId}>
-                      {member.user.name ?? member.user.email}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-                  defaultValue="MEMBER"
-                  name="role"
-                  title={roleDescriptions.MANAGER}
-                >
-                  {teamRoles.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
-                    </option>
-                  ))}
-                </select>
-                <Button className="w-full sm:w-auto" type="submit" variant="outline">
-                  Assign
-                </Button>
-              </form>
+                  <input name="teamId" type="hidden" value={team.id} />
+                  <select
+                    className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                    name="userId"
+                  >
+                    {members.map((member) => (
+                      <option key={member.userId} value={member.userId}>
+                        {member.user.name ?? member.user.email}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                    defaultValue="MEMBER"
+                    name="role"
+                    title={roleDescriptions.MANAGER}
+                  >
+                    {teamRoles.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                  <Button className="w-full sm:w-auto" type="submit" variant="outline">
+                    Assign
+                  </Button>
+                </form>
+                {canCreateTeam ? (
+                  <form action={archiveTeamAction}>
+                    <input name="teamId" type="hidden" value={team.id} />
+                    <Button className="w-full sm:w-auto" type="submit" variant="destructive">
+                      <Archive className="h-4 w-4" />
+                      Archive
+                    </Button>
+                  </form>
+                ) : null}
+              </div>
             ) : null}
           </div>
           <div className="mt-4 space-y-2">
@@ -483,6 +512,46 @@ function TeamsPanel({
           </div>
         </div>
       ))}
+
+      {archivedTeams.length > 0 ? (
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">
+                Archived teams
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Historical meetings stay available.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            {archivedTeams.map((team) => (
+              <div
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm"
+                key={team.id}
+              >
+                <div>
+                  <p className="font-medium text-slate-950">{team.name}</p>
+                  <p className="text-sm text-slate-500">
+                    {team.members.length} member
+                    {team.members.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+                {canRestoreTeam ? (
+                  <form action={restoreTeamAction}>
+                    <input name="teamId" type="hidden" value={team.id} />
+                    <Button className="w-full sm:w-auto" type="submit" variant="outline">
+                      <RotateCcw className="h-4 w-4" />
+                      Restore
+                    </Button>
+                  </form>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </section>
   );
 }

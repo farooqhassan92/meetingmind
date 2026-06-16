@@ -170,10 +170,11 @@ export function getCreatableTeams(
     .filter((organization) =>
       access.ceoOrganizationIds.includes(organization.id)
     )
-    .flatMap((organization) => organization.teams);
-  const assignedTeams = access.teamMemberships.map(
-    (membership) => membership.team
-  );
+    .flatMap((organization) => organization.teams)
+    .filter((team) => !team.archivedAt);
+  const assignedTeams = access.teamMemberships
+    .map((membership) => membership.team)
+    .filter((team) => !team.archivedAt);
   const teamsById = new Map(
     [...ceoTeams, ...assignedTeams].map((team) => [team.id, team])
   );

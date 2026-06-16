@@ -78,11 +78,24 @@ export default async function DashboardPage({
       ) ?? null
     : null;
   const teams = selectedOrganization
-    ? selectedOrganization.teams
-    : organizations.flatMap((organization) => organization.teams);
+    ? selectedOrganization.teams.filter((team) => !team.archivedAt)
+    : organizations
+        .flatMap((organization) => organization.teams)
+        .filter((team) => !team.archivedAt);
   const selectedTeam = requestedTeamId
     ? teams.find((team) => team.id === requestedTeamId) ?? null
     : null;
+  const filterOrganizations = organizations.map((organization) => ({
+    id: organization.id,
+    name: organization.name,
+    teams: organization.teams
+      .filter((team) => !team.archivedAt)
+      .map((team) => ({
+        id: team.id,
+        name: team.name,
+        organizationId: team.organizationId
+      }))
+  }));
   const selectedOrganizationId = selectedOrganization?.id;
   const selectedTeamId = selectedTeam?.id;
   const semanticFrom = dateFilter?.gte ? dateInputValue(dateFilter.gte) : from;
@@ -235,7 +248,7 @@ export default async function DashboardPage({
         from={from}
         hasActiveFilters={hasActiveFilters}
         maxDate={dateInputValue(new Date())}
-        organizations={organizations}
+        organizations={filterOrganizations}
         query={query}
         range={range}
         selectedOrganizationId={selectedOrganizationId ?? ""}
