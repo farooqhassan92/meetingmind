@@ -37,8 +37,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json(transcription);
   } catch (caught) {
+    const detail = caught instanceof Error ? caught.message : "";
     const message =
-      caught instanceof Error ? caught.message : "Audio transcription failed.";
+      detail.includes("Whisper") || detail.includes("MCP")
+        ? "Could not transcribe audio. Check that your local transcription service is configured and try again."
+        : detail || "Audio transcription failed. Please try again.";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

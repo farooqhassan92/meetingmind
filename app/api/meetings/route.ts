@@ -115,13 +115,25 @@ export async function GET(request: Request) {
     dateFilter: getDateFilter(range, from, to),
     query
   });
-  const meetings = await getMeetingsPage({
-    cursor,
-    take: limit + 1,
-    where: {
-      AND: [accessibleWhere, filterWhere]
-    }
-  });
+  let meetings;
+
+  try {
+    meetings = await getMeetingsPage({
+      cursor,
+      take: limit + 1,
+      where: {
+        AND: [accessibleWhere, filterWhere]
+      }
+    });
+  } catch (caught) {
+    console.error("Could not load meeting history.", caught);
+
+    return NextResponse.json(
+      { error: "Could not load meeting history. Please try again." },
+      { status: 500 }
+    );
+  }
+
   const hasMore = meetings.length > limit;
   const visibleMeetings = hasMore ? meetings.slice(0, limit) : meetings;
   const cards = visibleMeetings.map((meeting) =>

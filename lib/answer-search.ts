@@ -11,6 +11,16 @@ type OllamaResponse = {
   };
 };
 
+export function isAnswerServiceError(message: string) {
+  return [
+    "Answer",
+    "Ollama",
+    "fetch failed",
+    "ECONNREFUSED",
+    "UND_ERR_CONNECT_TIMEOUT"
+  ].some((token) => message.includes(token));
+}
+
 function sourceLabel(result: SemanticSearchResult, index: number) {
   const team = result.teamName ? `, ${result.teamName}` : "";
   const organization = result.organizationName
@@ -91,14 +101,18 @@ export async function answerFromMeetingChunks(input: AnswerSearchInput) {
   });
 
   if (!response.ok) {
-    throw new Error(`Answer request failed with status ${response.status}.`);
+    throw new Error(
+      `Answer model returned status ${response.status}. Check that Ollama is running and the chat model is available.`
+    );
   }
 
   const payload = (await response.json()) as OllamaResponse;
   const answer = payload.message?.content?.trim();
 
   if (!answer) {
-    throw new Error("Ollama returned an empty answer.");
+    throw new Error(
+      "The answer model returned an empty response. Try again with a more specific question."
+    );
   }
 
   return answer;

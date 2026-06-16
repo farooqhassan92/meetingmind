@@ -13,6 +13,8 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip } from "@/components/ui/tooltip";
+import { useToast } from "@/components/ui/toast";
+import { friendlyClientError } from "@/lib/client-errors";
 import type { MeetingAnalysis } from "@/mcp-server/src/llm/schemas";
 
 type MeetingFormOrganization = {
@@ -30,6 +32,7 @@ type MeetingFormProps = {
 
 export function MeetingForm({ organizations = [] }: MeetingFormProps) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [organizationId, setOrganizationId] = useState(
     organizations[0]?.id ?? ""
   );
@@ -128,20 +131,38 @@ export function MeetingForm({ organizations = [] }: MeetingFormProps) {
           throw new Error("Please sign in to transcribe audio.");
         }
 
-        throw new Error(payload.error ?? "Transcription failed");
+        throw new Error(
+          payload.error ??
+            "We could not transcribe this file. Check the audio format and try again."
+        );
       }
 
       if (!payload.transcript) {
-        throw new Error("Transcription completed without transcript text.");
+        throw new Error(
+          "Transcription finished, but no transcript text was returned. Try a clearer or longer recording."
+        );
       }
 
       setTranscript(payload.transcript);
       setTranscriptionStatus("Transcript ready.");
+      showToast({
+        description: "The transcript is ready for review and analysis.",
+        title: "Audio transcribed",
+        variant: "success"
+      });
     } catch (caught) {
       setTranscriptionStatus(null);
-      setTranscriptionError(
-        caught instanceof Error ? caught.message : "Transcription failed"
+      const message = friendlyClientError(
+        caught,
+        "We could not transcribe this file. Please try again."
       );
+
+      setTranscriptionError(message);
+      showToast({
+        description: message,
+        title: "Transcription failed",
+        variant: "error"
+      });
     } finally {
       setIsTranscribing(false);
     }
@@ -174,15 +195,35 @@ export function MeetingForm({ organizations = [] }: MeetingFormProps) {
           throw new Error("Please sign in to analyze a meeting.");
         }
 
-        throw new Error(payload.error ?? "Analysis failed");
+        throw new Error(
+          payload.error ??
+            "We could not analyze this transcript. Please try again."
+        );
       }
       setAnalysis(payload.analysis);
+      showToast({
+        description: payload.meetingId
+          ? "The meeting was analyzed and saved."
+          : "The meeting was analyzed successfully.",
+        title: "Analysis complete",
+        variant: "success"
+      });
 
       if (payload.meetingId) {
         router.push(`/dashboard/${payload.meetingId}`);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Analysis failed");
+      const message = friendlyClientError(
+        caught,
+        "We could not analyze this transcript. Please try again."
+      );
+
+      setError(message);
+      showToast({
+        description: message,
+        title: "Analysis failed",
+        variant: "error"
+      });
     } finally {
       setIsLoading(false);
     }

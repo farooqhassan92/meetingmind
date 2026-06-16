@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { friendlyClientError } from "@/lib/client-errors";
 
 type SemanticSearchResult = {
   chunkId: string;
@@ -54,6 +56,7 @@ export function SemanticSearchPanel({
   teamId,
   to
 }: SemanticSearchPanelProps) {
+  const { showToast } = useToast();
   const [answer, setAnswer] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SemanticSearchResult[]>([]);
@@ -66,7 +69,14 @@ export function SemanticSearchPanel({
     const trimmedQuery = query.trim();
 
     if (trimmedQuery.length < 3) {
-      setError("Search query must be at least 3 characters.");
+      const message = "Search query must be at least 3 characters.";
+
+      setError(message);
+      showToast({
+        description: message,
+        title: "Search needs more detail",
+        variant: "info"
+      });
       return;
     }
 
@@ -103,8 +113,8 @@ export function SemanticSearchPanel({
         throw new Error(
           payload.error ??
             (nextMode === "answer"
-              ? "Answer search failed."
-              : "Semantic search failed.")
+              ? "Could not generate an answer. Try a narrower question or check that Ollama is running."
+              : "Could not search meeting notes. Try again in a moment.")
         );
       }
 
@@ -112,16 +122,40 @@ export function SemanticSearchPanel({
         const answerPayload = payload as AnswerSearchPayload;
         setAnswer(answerPayload.answer ?? "");
         setResults(answerPayload.sources ?? []);
+        showToast({
+          description: "The answer was generated from matching meeting notes.",
+          title: "Answer ready",
+          variant: "success"
+        });
       } else {
         const resultsPayload = payload as {
           results?: SemanticSearchResult[];
         };
         setResults(resultsPayload.results ?? []);
+        showToast({
+          description: `${resultsPayload.results?.length ?? 0} matching note${
+            resultsPayload.results?.length === 1 ? "" : "s"
+          } found.`,
+          title: "Search complete",
+          variant: "success"
+        });
       }
     } catch (caught) {
       setAnswer(null);
       setResults([]);
-      setError(caught instanceof Error ? caught.message : "Search failed.");
+      const message = friendlyClientError(
+        caught,
+        nextMode === "answer"
+          ? "Could not generate an answer. Try a narrower question or check that Ollama is running."
+          : "Could not search meeting notes. Try again in a moment."
+      );
+
+      setError(message);
+      showToast({
+        description: message,
+        title: nextMode === "answer" ? "Answer failed" : "Search failed",
+        variant: "error"
+      });
     } finally {
       setIsSearching(false);
     }

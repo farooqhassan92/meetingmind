@@ -6,6 +6,8 @@ import { useState } from "react";
 
 import { DeleteMeetingButton } from "@/components/delete-meeting-button";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { friendlyClientError } from "@/lib/client-errors";
 import type { MeetingHistoryCard } from "@/lib/meeting-history";
 
 type MeetingHistoryListProps = {
@@ -42,6 +44,7 @@ export function MeetingHistoryList({
   initialMeetings,
   pageSize
 }: MeetingHistoryListProps) {
+  const { showToast } = useToast();
   const [meetings, setMeetings] = useState(initialMeetings);
   const [nextCursor, setNextCursor] = useState(
     initialMeetings.at(-1)?.id ?? null
@@ -73,7 +76,10 @@ export function MeetingHistoryList({
       const payload = (await response.json()) as MeetingsResponse;
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Could not load more meetings.");
+        throw new Error(
+          payload.error ??
+            "Could not load more meetings. Refresh the page and try again."
+        );
       }
 
       const nextMeetings = payload.meetings ?? [];
@@ -82,9 +88,17 @@ export function MeetingHistoryList({
       setNextCursor(payload.nextCursor ?? null);
       setCanLoadMore(Boolean(payload.nextCursor));
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "Could not load more meetings."
+      const message = friendlyClientError(
+        caught,
+        "Could not load more meetings. Refresh the page and try again."
       );
+
+      setError(message);
+      showToast({
+        description: message,
+        title: "Could not load meetings",
+        variant: "error"
+      });
     } finally {
       setIsLoading(false);
     }

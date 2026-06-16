@@ -6,6 +6,16 @@ type OllamaEmbeddingResponse = {
   embedding?: number[];
 };
 
+export function isEmbeddingServiceError(message: string) {
+  return [
+    "Embedding",
+    "Ollama",
+    "fetch failed",
+    "ECONNREFUSED",
+    "UND_ERR_CONNECT_TIMEOUT"
+  ].some((token) => message.includes(token));
+}
+
 export async function embedText(text: string) {
   const baseUrl =
     process.env.OLLAMA_BASE_URL?.replace(/\/$/, "") ?? DEFAULT_OLLAMA_BASE_URL;
@@ -20,18 +30,22 @@ export async function embedText(text: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`Embedding request failed with status ${response.status}.`);
+    throw new Error(
+      `Embedding service returned status ${response.status}. Check that Ollama is running and the embedding model is available.`
+    );
   }
 
   const payload = (await response.json()) as OllamaEmbeddingResponse;
 
   if (!Array.isArray(payload.embedding)) {
-    throw new Error("Embedding response did not include an embedding array.");
+    throw new Error(
+      "Embedding service returned an unexpected response. Check the embedding model configuration."
+    );
   }
 
   if (payload.embedding.length !== EMBEDDING_DIMENSIONS) {
     throw new Error(
-      `Embedding model returned ${payload.embedding.length} dimensions; expected ${EMBEDDING_DIMENSIONS}.`
+      `Embedding model returned ${payload.embedding.length} dimensions; expected ${EMBEDDING_DIMENSIONS}. Check that EMBEDDING_MODEL is set to nomic-embed-text.`
     );
   }
 

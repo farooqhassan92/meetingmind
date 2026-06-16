@@ -21,32 +21,61 @@ export async function DELETE(
   const access = await getUserMeetingAccess(userId);
 
   if (!access) {
-    return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Could not verify your access to this meeting." },
+      { status: 403 }
+    );
   }
 
-  const meeting = await prisma.meeting.findFirst({
-    where: {
-      AND: [
-        { id },
-        buildAccessibleMeetingWhere(access),
-        {
-          OR: [
-            { userId: access.user.id },
-            { organizationId: { in: access.orgWideOrganizationIds } }
-          ]
-        }
-      ]
-    },
-    select: { id: true }
-  });
+  let meeting;
+
+  try {
+    meeting = await prisma.meeting.findFirst({
+      where: {
+        AND: [
+          { id },
+          buildAccessibleMeetingWhere(access),
+          {
+            OR: [
+              { userId: access.user.id },
+              { organizationId: { in: access.orgWideOrganizationIds } }
+            ]
+          }
+        ]
+      },
+      select: { id: true }
+    });
+  } catch (caught) {
+    console.error("Could not check meeting before deletion.", caught);
+
+    return NextResponse.json(
+      { error: "Could not check this meeting. Please try again." },
+      { status: 500 }
+    );
+  }
 
   if (!meeting) {
-    return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+    return NextResponse.json(
+      {
+        error:
+          "Meeting not found. It may have already been deleted, or you may not have permission to remove it."
+      },
+      { status: 404 }
+    );
   }
 
-  await prisma.meeting.delete({
-    where: { id: meeting.id }
-  });
+  try {
+    await prisma.meeting.delete({
+      where: { id: meeting.id }
+    });
+  } catch (caught) {
+    console.error("Could not delete meeting.", caught);
+
+    return NextResponse.json(
+      { error: "Could not delete this meeting. Please try again." },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }

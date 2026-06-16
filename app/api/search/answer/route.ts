@@ -2,7 +2,11 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { answerFromMeetingChunks } from "@/lib/answer-search";
+import {
+  answerFromMeetingChunks,
+  isAnswerServiceError
+} from "@/lib/answer-search";
+import { isEmbeddingServiceError } from "@/lib/embeddings";
 import {
   buildAccessibleMeetingWhere,
   getUserMeetingAccess
@@ -108,8 +112,13 @@ export async function POST(request: Request) {
       sources: results
     });
   } catch (caught) {
+    const detail = caught instanceof Error ? caught.message : "";
     const message =
-      caught instanceof Error ? caught.message : "Answer search failed.";
+      isEmbeddingServiceError(detail)
+        ? "Could not search meeting notes for this answer. Check that Ollama is running and nomic-embed-text is available, then try again."
+        : isAnswerServiceError(detail)
+          ? "Could not generate an answer. Check that Ollama is running and the chat model is available, then try again."
+          : detail || "Could not generate an answer. Please try again.";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -6,6 +6,7 @@ import {
   buildAccessibleMeetingWhere,
   getUserMeetingAccess
 } from "@/lib/organization-access";
+import { isEmbeddingServiceError } from "@/lib/embeddings";
 import { searchMeetingChunks } from "@/lib/semantic-search";
 
 const requestSchema = z.object({
@@ -97,8 +98,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ results });
   } catch (caught) {
+    const detail = caught instanceof Error ? caught.message : "";
     const message =
-      caught instanceof Error ? caught.message : "Semantic search failed.";
+      isEmbeddingServiceError(detail)
+        ? "Could not search meeting notes. Check that Ollama is running and nomic-embed-text is available, then try again."
+        : detail || "Could not search meeting notes. Please try again.";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

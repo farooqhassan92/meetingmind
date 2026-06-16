@@ -59,8 +59,10 @@ export async function POST(request: Request) {
   try {
     analysis = await analyzeMeeting(body.data.transcript);
   } catch (caught) {
-    const message =
-      caught instanceof Error ? caught.message : "Meeting analysis failed.";
+    const detail = caught instanceof Error ? caught.message : "";
+    const message = detail.includes("Ollama") || detail.includes("MCP")
+      ? "Could not analyze the meeting. Check that the local AI service is running, then try again."
+      : detail || "Meeting analysis failed.";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -169,8 +171,9 @@ export async function POST(request: Request) {
       console.error("Could not create meeting search chunks.", caught);
     }
   } catch (caught) {
+    const detail = caught instanceof Error ? caught.message : "";
     const message =
-      caught instanceof Error ? caught.message : "Could not save meeting.";
+      detail || "Could not save meeting. Please try again in a moment.";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }
