@@ -18,6 +18,12 @@ type SemanticSearchResult = {
   teamName: string | null;
 };
 
+type AnswerSearchPayload = {
+  answer?: string;
+  error?: string;
+  sources?: SemanticSearchResult[];
+};
+
 type SemanticSearchPanelProps = {
   from?: string;
   organizationId?: string;
@@ -34,7 +40,10 @@ function formatChunkType(type: string) {
 }
 
 function similarityLabel(distance: number) {
-  const similarity = Math.max(0, Math.min(100, Math.round((1 - distance) * 100)));
+  const similarity = Math.max(
+    0,
+    Math.min(100, Math.round((1 - distance) * 100))
+  );
 
   return `${similarity}% match`;
 }
@@ -45,13 +54,15 @@ export function SemanticSearchPanel({
   teamId,
   to
 }: SemanticSearchPanelProps) {
+  const [answer, setAnswer] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SemanticSearchResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [mode, setMode] = useState<"answer" | "matches">("answer");
   const [isSearching, setIsSearching] = useState(false);
 
-  async function onSearch() {
+  async function onSearch(nextMode: "answer" | "matches") {
     const trimmedQuery = query.trim();
 
     if (trimmedQuery.length < 3) {
@@ -60,37 +71,57 @@ export function SemanticSearchPanel({
     }
 
     setError(null);
+    setAnswer(null);
     setHasSearched(true);
+    setMode(nextMode);
     setIsSearching(true);
 
     try {
-      const response = await fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from,
-          limit: 8,
-          organizationId,
-          query: trimmedQuery,
-          teamId,
-          to
-        })
-      });
-      const payload = (await response.json()) as {
-        error?: string;
-        results?: SemanticSearchResult[];
-      };
+      const response = await fetch(
+        nextMode === "answer" ? "/api/search/answer" : "/api/search",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from,
+            limit: 8,
+            organizationId,
+            query: trimmedQuery,
+            teamId,
+            to
+          })
+        }
+      );
+      const payload = (await response.json()) as
+        | AnswerSearchPayload
+        | {
+            error?: string;
+            results?: SemanticSearchResult[];
+          };
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Semantic search failed.");
+        throw new Error(
+          payload.error ??
+            (nextMode === "answer"
+              ? "Answer search failed."
+              : "Semantic search failed.")
+        );
       }
 
-      setResults(payload.results ?? []);
+      if (nextMode === "answer") {
+        const answerPayload = payload as AnswerSearchPayload;
+        setAnswer(answerPayload.answer ?? "");
+        setResults(answerPayload.sources ?? []);
+      } else {
+        const resultsPayload = payload as {
+          results?: SemanticSearchResult[];
+        };
+        setResults(resultsPayload.results ?? []);
+      }
     } catch (caught) {
+      setAnswer(null);
       setResults([]);
-      setError(
-        caught instanceof Error ? caught.message : "Semantic search failed."
-      );
+      setError(caught instanceof Error ? caught.message : "Search failed.");
     } finally {
       setIsSearching(false);
     }
@@ -122,10 +153,10 @@ export function SemanticSearchPanel({
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                void onSearch();
+                void onSearch("answer");
               }
             }}
-            placeholder="What launch blockers came up?"
+            placeholder="What launch blockers came up last month?"
             type="search"
             value={query}
           />
@@ -133,7 +164,7 @@ export function SemanticSearchPanel({
         <Button
           className="w-full sm:w-auto"
           disabled={isSearching}
-          onClick={() => void onSearch()}
+          onClick={() => void onSearch("answer")}
           type="button"
         >
           {isSearching ? (
@@ -141,7 +172,17 @@ export function SemanticSearchPanel({
           ) : (
             <Search className="h-4 w-4" />
           )}
-          Search
+          Answer
+        </Button>
+        <Button
+          className="w-full sm:w-auto"
+          disabled={isSearching}
+          onClick={() => void onSearch("matches")}
+          type="button"
+          variant="outline"
+        >
+          <Search className="h-4 w-4" />
+          Matches
         </Button>
       </div>
 
@@ -149,46 +190,63 @@ export function SemanticSearchPanel({
 
       {hasSearched && !isSearching && !error ? (
         <div className="mt-4 space-y-3">
+          {mode === "answer" && answer ? (
+            <div className="rounded-md border border-teal-200 bg-teal-50 p-4">
+              <p className="text-sm font-semibold text-teal-950">Answer</p>
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">
+                {answer}
+              </p>
+            </div>
+          ) : null}
           {results.length > 0 ? (
-            results.map((result) => (
-              <Link
-                className="block rounded-md border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-teal-200 hover:bg-white"
-                href={`/dashboard/${result.meetingId}`}
-                key={result.chunkId}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-950">
-                      {result.meetingTitle}
-                    </p>
-                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">
-                      {result.content}
-                    </p>
+            <>
+              {mode === "answer" ? (
+                <p className="pt-1 text-sm font-medium text-slate-700">
+                  Sources
+                </p>
+              ) : null}
+              {results.map((result) => (
+                <Link
+                  className="block rounded-md border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-teal-200 hover:bg-white"
+                  href={`/dashboard/${result.meetingId}`}
+                  key={result.chunkId}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-slate-950">
+                        {result.meetingTitle}
+                      </p>
+                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">
+                        {result.content}
+                      </p>
+                    </div>
+                    <span className="rounded-md bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700">
+                      {similarityLabel(result.distance)}
+                    </span>
                   </div>
-                  <span className="rounded-md bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700">
-                    {similarityLabel(result.distance)}
-                  </span>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
-                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-slate-200">
-                    {formatChunkType(result.chunkType)}
-                  </span>
-                  {result.organizationName ? (
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
                     <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-slate-200">
-                      {result.organizationName}
+                      {formatChunkType(result.chunkType)}
                     </span>
-                  ) : null}
-                  {result.teamName ? (
-                    <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-slate-200">
-                      {result.teamName}
-                    </span>
-                  ) : null}
-                </div>
-              </Link>
-            ))
+                    {result.organizationName ? (
+                      <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-slate-200">
+                        {result.organizationName}
+                      </span>
+                    ) : null}
+                    {result.teamName ? (
+                      <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-slate-200">
+                        {result.teamName}
+                      </span>
+                    ) : null}
+                  </div>
+                </Link>
+              ))}
+            </>
           ) : (
             <div className="rounded-md border border-dashed border-slate-300 p-5 text-sm text-slate-500">
-              No semantic matches found.
+              {mode === "answer"
+                ? "No source meetings found for that question."
+                : "No semantic matches found."}
             </div>
           )}
         </div>
