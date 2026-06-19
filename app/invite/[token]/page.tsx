@@ -4,10 +4,9 @@ import Link from "next/link";
 import type { Route } from "next";
 import { notFound } from "next/navigation";
 
+import { AutoAcceptInvitation } from "@/components/auto-accept-invitation";
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
-
-import { acceptInvitationAction } from "./actions";
 
 export default async function InvitePage({
   params
@@ -16,6 +15,8 @@ export default async function InvitePage({
 }) {
   const { token } = await params;
   const { userId } = await auth();
+  const invitePath = `/invite/${token}` as Route;
+  const authRedirect = encodeURIComponent(invitePath);
   const invitation = await prisma.organizationInvitation.findUnique({
     where: { token },
     include: {
@@ -80,21 +81,24 @@ export default async function InvitePage({
               This invitation has expired. Ask for a new invite.
             </p>
           ) : userId ? (
-            <form action={acceptInvitationAction} className="mt-5">
-              <input name="token" type="hidden" value={token} />
-              <Button className="w-full sm:w-auto" type="submit">
-                <CheckCircle2 className="h-4 w-4" />
-                Accept invite
-              </Button>
-            </form>
+            <AutoAcceptInvitation token={token} />
           ) : (
             <div className="mt-5 space-y-3">
               <p className="text-sm text-slate-600">
                 Sign in with {invitation.email}, then return to this invite.
               </p>
-              <Button asChild className="w-full sm:w-auto">
-                <Link href={"/sign-in" as Route}>Sign in</Link>
-              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button asChild className="w-full sm:w-auto">
+                  <Link href={`/sign-in?redirect_url=${authRedirect}` as Route}>
+                    Sign in
+                  </Link>
+                </Button>
+                <Button asChild className="w-full sm:w-auto" variant="outline">
+                  <Link href={`/sign-up?redirect_url=${authRedirect}` as Route}>
+                    Create account
+                  </Link>
+                </Button>
+              </div>
             </div>
           )}
         </div>

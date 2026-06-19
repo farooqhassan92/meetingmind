@@ -425,6 +425,44 @@ export async function createInvitationAction(formData: FormData) {
     }
   }
 
+  const existingMember = await prisma.organizationMember.findFirst({
+    where: {
+      organizationId: parsed.organizationId,
+      user: {
+        email: {
+          equals: parsed.email,
+          mode: "insensitive"
+        }
+      }
+    },
+    select: { id: true }
+  });
+
+  if (existingMember) {
+    throw new Error(
+      "This user is already a member of the organization. Assign them to a team from the Teams tab instead."
+    );
+  }
+
+  const existingPendingInvite = await prisma.organizationInvitation.findFirst({
+    where: {
+      acceptedAt: null,
+      email: {
+        equals: parsed.email,
+        mode: "insensitive"
+      },
+      organizationId: parsed.organizationId,
+      teamId: parsed.teamId ?? null
+    },
+    select: { id: true }
+  });
+
+  if (existingPendingInvite) {
+    throw new Error(
+      "A pending invitation already exists for this email and team. Resend the existing invitation instead."
+    );
+  }
+
   const invitation = await prisma.organizationInvitation.create({
     data: {
       organizationId: parsed.organizationId,

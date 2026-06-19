@@ -2,6 +2,7 @@
 
 import { auth, currentUser } from "@clerk/nextjs/server";
 import type { Route } from "next";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
@@ -24,6 +25,37 @@ function describeEmail(email: string) {
   }
 
   return `${local.slice(0, 3)}***@${domain}`;
+}
+
+function bestOrganizationRole(
+  invitations: { organizationRole: "CEO" | "MEMBER" }[]
+) {
+  return invitations.some((candidate) => candidate.organizationRole === "CEO")
+    ? "CEO"
+    : "MEMBER";
+}
+
+function bestTeamRoles(
+  invitations: {
+    teamId: string | null;
+    teamRole: "MANAGER" | "MEMBER" | null;
+  }[]
+) {
+  const roles = new Map<string, "MANAGER" | "MEMBER">();
+
+  for (const invitation of invitations) {
+    if (!invitation.teamId || !invitation.teamRole) {
+      continue;
+    }
+
+    const currentRole = roles.get(invitation.teamId);
+
+    if (!currentRole || invitation.teamRole === "MANAGER") {
+      roles.set(invitation.teamId, invitation.teamRole);
+    }
+  }
+
+  return roles;
 }
 
 export async function acceptInvitationAction(formData: FormData) {
@@ -80,6 +112,27 @@ export async function acceptInvitationAction(formData: FormData) {
   }
 
   await prisma.$transaction(async (tx) => {
+    const pendingInvitations = await tx.organizationInvitation.findMany({
+      where: {
+        acceptedAt: null,
+        email: {
+          equals: invitation.email,
+          mode: "insensitive"
+        },
+        expiresAt: {
+          gte: new Date()
+        },
+        organizationId: invitation.organizationId
+      },
+      select: {
+        organizationRole: true,
+        teamId: true,
+        teamRole: true
+      }
+    });
+    const organizationRole = bestOrganizationRole(pendingInvitations);
+    const teamRoles = bestTeamRoles(pendingInvitations);
+
     await tx.organizationMember.upsert({
       where: {
         organizationId_userId: {
@@ -88,42 +141,54 @@ export async function acceptInvitationAction(formData: FormData) {
         }
       },
       update: {
-        role: invitation.organizationRole
+        role: organizationRole
       },
       create: {
         organizationId: invitation.organizationId,
         userId: user.id,
-        role: invitation.organizationRole
+        role: organizationRole
       }
     });
 
-    if (invitation.teamId && invitation.teamRole) {
+    for (const [teamId, teamRole] of teamRoles) {
       await tx.teamMember.upsert({
         where: {
           teamId_userId: {
-            teamId: invitation.teamId,
+            teamId,
             userId: user.id
           }
         },
         update: {
-          role: invitation.teamRole
+          role: teamRole
         },
         create: {
-          teamId: invitation.teamId,
+          teamId,
           userId: user.id,
-          role: invitation.teamRole
+          role: teamRole
         }
       });
     }
 
-    await tx.organizationInvitation.update({
-      where: { id: invitation.id },
+    await tx.organizationInvitation.updateMany({
+      where: {
+        acceptedAt: null,
+        email: {
+          equals: invitation.email,
+          mode: "insensitive"
+        },
+        organizationId: invitation.organizationId
+      },
       data: {
         acceptedAt: new Date(),
         acceptedById: user.id
       }
     });
   });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/new");
+  revalidatePath("/dashboard/workspace");
+  revalidatePath("/onboarding");
 
   redirect("/dashboard" as Route);
 }
