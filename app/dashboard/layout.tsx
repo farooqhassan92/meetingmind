@@ -1,13 +1,47 @@
+import { auth, currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
+import type { Route } from "next";
+import { redirect } from "next/navigation";
 
 import { UserMenu } from "@/components/auth/user-menu";
+import {
+  ensureAppUser,
+  getUserMeetingAccess
+} from "@/lib/organization-access";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children
 }: {
   children: React.ReactNode;
 }) {
   const hasClerkKey = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+  if (hasClerkKey) {
+    const { userId } = await auth();
+
+    if (!userId) {
+      redirect("/sign-in" as Route);
+    }
+
+    const clerkUser = await currentUser();
+    const email = clerkUser?.primaryEmailAddress?.emailAddress;
+
+    if (!email) {
+      throw new Error("Signed-in user is missing a primary email address.");
+    }
+
+    await ensureAppUser({
+      clerkId: userId,
+      email,
+      name: clerkUser.fullName ?? clerkUser.username ?? null
+    });
+
+    const access = await getUserMeetingAccess(userId);
+
+    if (!access || access.memberships.length === 0) {
+      redirect("/onboarding" as Route);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-slate-50">

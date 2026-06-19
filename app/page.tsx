@@ -1,9 +1,15 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { ArrowRight, FileAudio, ListChecks, Search } from "lucide-react";
 import Link from "next/link";
+import type { Route } from "next";
+import { redirect } from "next/navigation";
 
 import { UserMenu } from "@/components/auth/user-menu";
 import { Button } from "@/components/ui/button";
+import {
+  ensureAppUser,
+  getUserMeetingAccess
+} from "@/lib/organization-access";
 
 const features = [
   { icon: FileAudio, label: "Audio or transcript input" },
@@ -16,6 +22,27 @@ export default async function HomePage() {
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
   );
   const { userId } = hasClerkConfig ? await auth() : { userId: null };
+
+  if (userId) {
+    const clerkUser = await currentUser();
+    const email = clerkUser?.primaryEmailAddress?.emailAddress;
+
+    if (!email) {
+      throw new Error("Signed-in user is missing a primary email address.");
+    }
+
+    await ensureAppUser({
+      clerkId: userId,
+      email,
+      name: clerkUser.fullName ?? clerkUser.username ?? null
+    });
+
+    const access = await getUserMeetingAccess(userId);
+
+    if (!access || access.memberships.length === 0) {
+      redirect("/onboarding" as Route);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-slate-50">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { redirect } from "next/navigation";
 
+import { OnboardingActions } from "@/components/onboarding-actions";
 import { Button } from "@/components/ui/button";
 import {
   ensureAppUser,
@@ -45,17 +46,22 @@ export default async function OnboardingPage() {
     <main className="min-h-screen bg-slate-50">
       <section className="mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-4 py-8 sm:px-6 sm:py-10">
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-          <p className="text-sm font-medium uppercase tracking-wide text-teal-700">
-            Welcome to MeetingMind
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">
-            Join or create an organization
-          </h1>
-          <p className="mt-3 max-w-2xl leading-7 text-slate-600">
-            Meeting search is organized by company and team. Create a new
-            organization if you are setting one up, or accept an invitation from
-            your CEO or manager.
-          </p>
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-wide text-teal-700">
+                Welcome to MeetingMind
+              </p>
+              <h1 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-4xl">
+                Join or create an organization
+              </h1>
+              <p className="mt-3 max-w-2xl leading-7 text-slate-600">
+                Meeting search is organized by company and team. Create a new
+                organization if you are setting one up, or accept an invitation
+                from your CEO or manager.
+              </p>
+            </div>
+            <OnboardingActions />
+          </div>
         </div>
 
         <div className="mt-8 grid gap-5 lg:grid-cols-2">
