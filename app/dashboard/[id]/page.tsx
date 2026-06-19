@@ -1,7 +1,13 @@
 import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 
+import { ActionItemNoticeToast } from "@/components/action-item-notice-toast";
+import { ActionItemWorkflow } from "@/components/action-item-workflow";
 import { DeleteMeetingButton } from "@/components/delete-meeting-button";
+import {
+  canManageMeetingActionItems,
+  getActionItemAssigneesForMeeting
+} from "@/lib/action-items";
 import {
   buildAccessibleMeetingWhere,
   getUserMeetingAccess
@@ -9,11 +15,14 @@ import {
 import { prisma } from "@/lib/prisma";
 
 export default async function MeetingDetailPage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ notice?: string }>;
 }) {
   const { id } = await params;
+  const queryParams = await searchParams;
   const { userId } = await auth();
 
   if (!userId) {
@@ -33,7 +42,18 @@ export default async function MeetingDetailPage({
     include: {
       organization: true,
       team: true,
-      actionItems: true,
+      actionItems: {
+        include: {
+          assignedUser: {
+            select: {
+              email: true,
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: [{ completed: "asc" }, { createdAt: "asc" }]
+      },
       decisions: true,
       topics: true,
       followUpQuestions: true
@@ -50,9 +70,13 @@ export default async function MeetingDetailPage({
       meeting.organizationId &&
         access.orgWideOrganizationIds.includes(meeting.organizationId)
     );
+  const canManageActionItems = canManageMeetingActionItems(access, meeting);
+  const assignees = await getActionItemAssigneesForMeeting(meeting);
 
   return (
     <section className="space-y-6">
+      <ActionItemNoticeToast notice={queryParams?.notice} />
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h1 className="break-words text-2xl font-semibold text-slate-950 sm:text-3xl">
@@ -84,17 +108,12 @@ export default async function MeetingDetailPage({
           <h2 className="text-lg font-semibold text-slate-950">
             Action items
           </h2>
-          <ul className="mt-3 space-y-3 text-sm text-slate-700">
-            {meeting.actionItems.map((item) => (
-              <li className="rounded-md bg-slate-50 p-3" key={item.id}>
-                <span className="font-medium text-slate-950">{item.title}</span>
-                <span className="block text-slate-500">
-                  {item.assignee ?? "Unassigned"}
-                  {item.deadline ? ` by ${item.deadline}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <ActionItemWorkflow
+            assignees={assignees}
+            canManage={canManageActionItems}
+            items={meeting.actionItems}
+            returnTo={`/dashboard/${meeting.id}`}
+          />
         </section>
 
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">

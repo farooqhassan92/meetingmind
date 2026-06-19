@@ -27,6 +27,10 @@ const notices = {
     title: "Invitation resent",
     description: "A fresh invitation email was sent."
   },
+  "invites-synced": {
+    title: "Invitations synced",
+    description: "Accepted invitations were cleaned up and team access was updated."
+  },
   "member-removed": {
     title: "Member removed",
     description: "The member no longer has organization access."

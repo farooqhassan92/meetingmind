@@ -3,10 +3,13 @@ import {
   Archive,
   Building2,
   CalendarDays,
+  CheckCircle2,
+  ClipboardList,
   Link2,
   Mail,
   Plus,
   RotateCcw,
+  ShieldCheck,
   Users
 } from "lucide-react";
 import Link from "next/link";
@@ -18,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { WorkspaceNoticeToast } from "@/components/workspace-notice-toast";
 import {
+  buildAccessibleMeetingWhere,
   ensureAppUser,
   getUserMeetingAccess
 } from "@/lib/organization-access";
@@ -67,6 +71,12 @@ type WorkspaceMember = Prisma.PromiseReturnType<
 type WorkspaceInvitation = Prisma.PromiseReturnType<
   typeof getWorkspaceInvitations
 >[number];
+type MemberRecentMeeting = Prisma.PromiseReturnType<
+  typeof getMemberRecentMeetings
+>[number];
+type MemberActionItem = Prisma.PromiseReturnType<
+  typeof getMemberActionItems
+>[number];
 
 function tabHref(organizationId: string, tab: string) {
   return `/dashboard/workspace?organizationId=${organizationId}&tab=${tab}`;
@@ -89,6 +99,132 @@ function getWorkspaceInvitations(organizationId: string) {
     include: { team: true },
     orderBy: { createdAt: "desc" }
   });
+}
+
+function getMemberRecentMeetings(
+  access: NonNullable<Awaited<ReturnType<typeof getUserMeetingAccess>>>,
+  organizationId: string
+) {
+  return prisma.meeting.findMany({
+    where: buildAccessibleMeetingWhere(access, { organizationId }),
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 5,
+    select: {
+      createdAt: true,
+      id: true,
+      summary: true,
+      team: {
+        select: { name: true }
+      },
+      title: true
+    }
+  });
+}
+
+function getMemberActionItems(
+  access: NonNullable<Awaited<ReturnType<typeof getUserMeetingAccess>>>,
+  organizationId: string
+) {
+  return prisma.actionItem.findMany({
+    where: {
+      assignedUserId: access.user.id,
+      completed: false,
+      meeting: buildAccessibleMeetingWhere(access, { organizationId })
+    },
+    include: {
+      meeting: {
+        select: {
+          id: true,
+          title: true
+        }
+      }
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 5
+  });
+}
+
+async function syncAcceptedPendingInvites({
+  invitations,
+  members,
+  organizationId
+}: {
+  invitations: WorkspaceInvitation[];
+  members: WorkspaceMember[];
+  organizationId: string;
+}) {
+  const membersByEmail = new Map(
+    members.map((member) => [
+      member.user.email.trim().toLowerCase(),
+      member
+    ])
+  );
+  const staleInvitations = invitations.filter((invitation) =>
+    membersByEmail.has(invitation.email.trim().toLowerCase())
+  );
+
+  if (staleInvitations.length === 0) {
+    return false;
+  }
+
+  await prisma.$transaction(
+    staleInvitations.flatMap((invitation) => {
+      const member = membersByEmail.get(invitation.email.trim().toLowerCase());
+
+      if (!member) {
+        return [];
+      }
+
+      const operations = [];
+
+      if (invitation.organizationRole === "CEO" && member.role !== "CEO") {
+        operations.push(
+          prisma.organizationMember.update({
+            where: {
+              organizationId_userId: {
+                organizationId,
+                userId: member.userId
+              }
+            },
+            data: { role: "CEO" }
+          })
+        );
+      }
+
+      if (invitation.teamId && invitation.teamRole) {
+        operations.push(
+          prisma.teamMember.upsert({
+            where: {
+              teamId_userId: {
+                teamId: invitation.teamId,
+                userId: member.userId
+              }
+            },
+            update: { role: invitation.teamRole },
+            create: {
+              role: invitation.teamRole,
+              teamId: invitation.teamId,
+              userId: member.userId
+            }
+          })
+        );
+      }
+
+      operations.push(
+        prisma.organizationInvitation.update({
+          where: { id: invitation.id },
+          data: {
+            acceptedAt: new Date(),
+            acceptedById: member.userId
+          }
+        })
+      );
+
+      return operations;
+    })
+  );
+
+  return true;
 }
 
 function invitationEmailStatus(invitation: WorkspaceInvitation) {
@@ -145,6 +281,26 @@ export default async function WorkspacePage({
   );
   const members = await getWorkspaceMembers(selectedOrganization.id);
   const invitations = await getWorkspaceInvitations(selectedOrganization.id);
+  const didSyncInvites = isSelectedCeo
+    ? await syncAcceptedPendingInvites({
+        invitations,
+        members,
+        organizationId: selectedOrganization.id
+      })
+    : false;
+
+  if (didSyncInvites) {
+    redirect(
+      `/dashboard/workspace?organizationId=${selectedOrganization.id}&tab=invites&notice=invites-synced` as Route
+    );
+  }
+
+  const memberEmails = new Set(
+    members.map((member) => member.user.email.trim().toLowerCase())
+  );
+  const pendingInvitations = invitations.filter(
+    (invitation) => !memberEmails.has(invitation.email.trim().toLowerCase())
+  );
   const meetingCount = await prisma.meeting.count({
     where: { organizationId: selectedOrganization.id }
   });
@@ -160,6 +316,104 @@ export default async function WorkspacePage({
       .map((team) => team.id),
     ...access.managedTeamIds
   ]);
+  const myActiveTeams = activeTeams.filter((team) =>
+    team.members.some((member) => member.userId === access.user.id)
+  );
+
+  if (!isSelectedCeo) {
+    const [accessibleMeetingCount, recentMeetings, memberActionItems] =
+      await Promise.all([
+        prisma.meeting.count({
+          where: buildAccessibleMeetingWhere(access, {
+            organizationId: selectedOrganization.id
+          })
+        }),
+        getMemberRecentMeetings(access, selectedOrganization.id),
+        getMemberActionItems(access, selectedOrganization.id)
+      ]);
+    const ceoMembers = members.filter((member) => member.role === "CEO");
+
+    return (
+      <section className="space-y-6">
+        <WorkspaceNoticeToast notice={params?.notice} />
+
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold text-slate-950">
+              My organization
+            </h1>
+            <p className="mt-2 max-w-2xl text-slate-600">
+              See where you belong, who you work with, and what you can access.
+            </p>
+          </div>
+          <Button asChild variant="outline">
+            <Link href="/dashboard">Back to history</Link>
+          </Button>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap items-end gap-3">
+            <form
+              action="/dashboard/workspace"
+              className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-end"
+            >
+              <label className="min-w-0 flex-1 text-sm font-medium text-slate-700">
+                Organization
+                <select
+                  className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                  defaultValue={selectedOrganization.id}
+                  name="organizationId"
+                >
+                  {organizations.map((organization) => (
+                    <option key={organization.id} value={organization.id}>
+                      {organization.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button className="w-full sm:w-auto" type="submit" variant="outline">
+                Switch
+              </Button>
+            </form>
+            <Tooltip
+              content={
+                access.managedTeamIds.length > 0
+                  ? roleDescriptions.MANAGER
+                  : roleDescriptions.MEMBER
+              }
+            >
+              <span className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
+                {access.managedTeamIds.length > 0 ? "MANAGER" : "MEMBER"}
+              </span>
+            </Tooltip>
+          </div>
+        </div>
+
+        <MemberOrganizationPanel
+          accessibleMeetingCount={accessibleMeetingCount}
+          actionItems={memberActionItems}
+          ceoMembers={ceoMembers}
+          memberCount={members.length}
+          myTeams={myActiveTeams}
+          organizationName={selectedOrganization.name}
+          recentMeetings={recentMeetings}
+          teamCount={activeTeams.length}
+        />
+
+        {myActiveTeams.length > 0 ? (
+          <TeamsPanel
+            archivedTeams={[]}
+            canCreateTeam={false}
+            canRestoreTeam={false}
+            manageableTeamIds={manageableTeamIds}
+            members={members}
+            organizationId={selectedOrganization.id}
+            teams={myActiveTeams}
+          />
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-6">
@@ -249,7 +503,7 @@ export default async function WorkspacePage({
 
       {selectedTab === "overview" ? (
         <OverviewPanel
-          invitationCount={invitations.length}
+          invitationCount={pendingInvitations.length}
           isCeo={isSelectedCeo}
           meetingCount={meetingCount}
           memberCount={members.length}
@@ -281,7 +535,7 @@ export default async function WorkspacePage({
       {selectedTab === "invites" ? (
         <InvitationsPanel
           canInvite={isSelectedCeo}
-          invitations={invitations}
+          invitations={pendingInvitations}
           organizationId={selectedOrganization.id}
           teams={activeTeams}
         />
@@ -344,6 +598,224 @@ function OverviewPanel({
             <p className="text-sm text-slate-500">{stat.label}</p>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function MemberOrganizationPanel({
+  accessibleMeetingCount,
+  actionItems,
+  ceoMembers,
+  memberCount,
+  myTeams,
+  organizationName,
+  recentMeetings,
+  teamCount
+}: {
+  accessibleMeetingCount: number;
+  actionItems: MemberActionItem[];
+  ceoMembers: WorkspaceMember[];
+  memberCount: number;
+  myTeams: NonNullable<
+    Awaited<ReturnType<typeof getUserMeetingAccess>>
+  >["organizations"][number]["teams"];
+  organizationName: string;
+  recentMeetings: MemberRecentMeeting[];
+  teamCount: number;
+}) {
+  const stats = [
+    { icon: Building2, label: "Organization teams", value: teamCount },
+    { icon: Users, label: "Organization members", value: memberCount },
+    { icon: CalendarDays, label: "Meetings you can access", value: accessibleMeetingCount },
+    { icon: ClipboardList, label: "Open actions assigned to you", value: actionItems.length }
+  ];
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">
+              {organizationName}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              This is your organization overview. Management actions are shown
+              only for teams where you are a manager.
+            </p>
+          </div>
+          <span className="rounded-md bg-teal-50 px-3 py-2 text-sm font-medium text-teal-800">
+            Member workspace
+          </span>
+        </div>
+
+        <div className="mt-5 grid auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat) => (
+            <div
+              className="flex h-full min-h-32 flex-col justify-between rounded-md border border-slate-200 bg-slate-50 p-4"
+              key={stat.label}
+            >
+              <stat.icon className="h-5 w-5 text-teal-700" />
+              <div>
+                <p className="mt-3 text-2xl font-semibold text-slate-950">
+                  {stat.value}
+                </p>
+                <p className="text-sm leading-5 text-slate-500">{stat.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid items-stretch gap-4 lg:grid-cols-2">
+        <section className="flex h-full min-h-80 flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-teal-700" />
+            <h2 className="text-lg font-semibold text-slate-950">
+              Organization contacts
+            </h2>
+          </div>
+          <div className="mt-4 flex-1 space-y-2">
+            {ceoMembers.length > 0 ? (
+              ceoMembers.map((member) => (
+                <div
+                  className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3"
+                  key={member.id}
+                >
+                  <p className="text-sm font-medium text-slate-950">
+                    {member.user.name ?? member.user.email}
+                  </p>
+                  <p className="text-sm text-slate-500">{member.user.email}</p>
+                  <p className="mt-1 text-xs font-medium text-teal-700">CEO</p>
+                </div>
+              ))
+            ) : (
+              <p className="flex min-h-40 items-center rounded-md border border-dashed border-slate-300 p-4 text-sm leading-6 text-slate-500">
+                No CEO contact is visible yet.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="flex h-full min-h-80 flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-teal-700" />
+            <h2 className="text-lg font-semibold text-slate-950">
+              My teams
+            </h2>
+          </div>
+          <div className="mt-4 flex-1 space-y-3">
+            {myTeams.length > 0 ? (
+              myTeams.map((team) => {
+                const managers = team.members.filter(
+                  (member) => member.role === "MANAGER"
+                );
+
+                return (
+                  <div
+                    className="rounded-md border border-slate-200 bg-slate-50 p-3"
+                    key={team.id}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium text-slate-950">{team.name}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {team.members.length} teammate
+                          {team.members.length === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <span className="rounded-md bg-white px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                        {managers.length > 0
+                          ? `${managers.length} manager${managers.length === 1 ? "" : "s"}`
+                          : "No manager"}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {team.members.map((member) => (
+                        <span
+                          className="rounded-md bg-white px-2 py-1 text-xs text-slate-600 ring-1 ring-slate-200"
+                          key={member.id}
+                        >
+                          {member.user.name ?? member.user.email} · {member.role}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="flex min-h-40 items-center rounded-md border border-dashed border-slate-300 p-4 text-sm leading-6 text-slate-500">
+                You are in the organization, but you are not assigned to a team
+                yet. Ask a CEO or manager to add you to a team.
+              </p>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <div className="grid items-stretch gap-4 lg:grid-cols-2">
+        <section className="flex h-full min-h-96 flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-teal-700" />
+            <h2 className="text-lg font-semibold text-slate-950">
+              Recent meetings I can access
+            </h2>
+          </div>
+          <div className="mt-4 flex-1 space-y-2">
+            {recentMeetings.length > 0 ? (
+              recentMeetings.map((meeting) => (
+                <Link
+                  className="block rounded-md border border-slate-200 bg-slate-50 p-3 transition-colors hover:border-teal-200 hover:bg-white"
+                  href={`/dashboard/${meeting.id}`}
+                  key={meeting.id}
+                >
+                  <p className="font-medium text-slate-950">{meeting.title}</p>
+                  <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">
+                    {meeting.summary}
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {meeting.team?.name ?? "No team"} ·{" "}
+                    {meeting.createdAt.toLocaleDateString()}
+                  </p>
+                </Link>
+              ))
+            ) : (
+              <p className="flex min-h-48 items-center rounded-md border border-dashed border-slate-300 p-4 text-sm leading-6 text-slate-500">
+                No accessible meetings yet.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="flex h-full min-h-96 flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-teal-700" />
+            <h2 className="text-lg font-semibold text-slate-950">
+              My open action items
+            </h2>
+          </div>
+          <div className="mt-4 flex-1 space-y-2">
+            {actionItems.length > 0 ? (
+              actionItems.map((item) => (
+                <Link
+                  className="block rounded-md border border-slate-200 bg-slate-50 p-3 transition-colors hover:border-teal-200 hover:bg-white"
+                  href={`/dashboard/${item.meeting.id}`}
+                  key={item.id}
+                >
+                  <p className="font-medium text-slate-950">{item.title}</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {item.meeting.title}
+                    {item.deadline ? ` · ${item.deadline}` : ""}
+                  </p>
+                </Link>
+              ))
+            ) : (
+              <p className="flex min-h-48 items-center rounded-md border border-dashed border-slate-300 p-4 text-sm leading-6 text-slate-500">
+                No open action items are assigned to you.
+              </p>
+            )}
+          </div>
+        </section>
       </div>
     </section>
   );

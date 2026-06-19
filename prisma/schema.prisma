@@ -14,6 +14,7 @@ model User {
   email               String
   name                String?
   meetings            Meeting[]
+  assignedActionItems ActionItem[]             @relation("AssignedActionItems")
   memberships         OrganizationMember[]
   teamMemberships     TeamMember[]
   sentInvitations     OrganizationInvitation[] @relation("SentInvitations")
@@ -166,14 +167,20 @@ enum MeetingChunkType {
 }
 
 model ActionItem {
-  id        String   @id @default(cuid())
-  meetingId String
-  title     String
-  assignee  String?
-  deadline  String?
-  completed Boolean  @default(false)
-  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id             String    @id @default(cuid())
+  meetingId      String
+  title          String
+  assignee       String?
+  assignedUserId String?
+  deadline       String?
+  completed      Boolean   @default(false)
+  completedAt    DateTime?
+  assignedUser   User?     @relation("AssignedActionItems", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  meeting        Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+
+  @@index([assignedUserId])
+  @@index([completed])
 }
 
 model Decision {

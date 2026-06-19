@@ -68,6 +68,12 @@ export default async function DashboardLayout({
             </Link>
             <Link
               className="rounded-md px-3 py-2 hover:bg-slate-100"
+              href="/dashboard/action-items"
+            >
+              Actions
+            </Link>
+            <Link
+              className="rounded-md px-3 py-2 hover:bg-slate-100"
               href="/dashboard/workspace"
             >
               Workspace
