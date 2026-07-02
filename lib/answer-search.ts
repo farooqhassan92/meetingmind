@@ -1,5 +1,6 @@
 import type { SemanticSearchResult } from "@/lib/semantic-search";
 import { answerWithGroq } from "@/lib/groq";
+import { getProvider } from "@/lib/providers";
 
 type AnswerSearchInput = {
   query: string;
@@ -67,8 +68,10 @@ export async function answerFromMeetingChunks(input: AnswerSearchInput) {
     return buildExtractiveAnswer(input);
   }
 
-  if (process.env.AI_PROVIDER !== "ollama") {
-    if (process.env.AI_PROVIDER === "groq") {
+  const aiProvider = getProvider("AI_PROVIDER");
+
+  if (aiProvider !== "ollama") {
+    if (aiProvider === "groq") {
       return answerWithGroq(input.query, buildContext(input.results));
     }
 

@@ -1,3 +1,5 @@
+import { getProvider } from "@/lib/providers";
+
 const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
 const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
 export const EMBEDDING_DIMENSIONS = 768;
@@ -24,7 +26,7 @@ export function isEmbeddingServiceError(message: string) {
 }
 
 export async function embedText(text: string) {
-  if (process.env.EMBEDDING_PROVIDER === "gemini") {
+  if (getProvider("EMBEDDING_PROVIDER") === "gemini") {
     return embedTextWithGemini(text);
   }
 
