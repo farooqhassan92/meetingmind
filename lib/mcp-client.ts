@@ -5,7 +5,11 @@ import {
   analyzeTranscriptWithGroq,
   transcribeAudioWithGroq
 } from "@/lib/groq";
-import { getProvider } from "@/lib/providers";
+import {
+  getProvider,
+  shouldUseGroqForAi,
+  shouldUseGroqForTranscription
+} from "@/lib/providers";
 import type { MeetingAnalysis } from "@/mcp-server/src/llm/schemas";
 
 type TranscribeInput = {
@@ -102,13 +106,11 @@ export async function transcribeAudio(input: TranscribeInput) {
   console.info("MeetingMind transcription provider", {
     aiProvider,
     hasGroqKey: Boolean(process.env.GROQ_API_KEY),
+    hostedRuntime: Boolean(process.env.VERCEL) || process.env.NODE_ENV === "production",
     transcriptionProvider
   });
 
-  if (
-    transcriptionProvider === "groq" ||
-    (!transcriptionProvider && aiProvider === "groq" && process.env.GROQ_API_KEY)
-  ) {
+  if (shouldUseGroqForTranscription()) {
     return transcribeAudioWithGroq(input);
   }
 
@@ -131,7 +133,7 @@ export async function transcribeAudio(input: TranscribeInput) {
 }
 
 export async function analyzeMeeting(transcript: string) {
-  if (getProvider("AI_PROVIDER") === "groq") {
+  if (shouldUseGroqForAi()) {
     return analyzeTranscriptWithGroq(transcript);
   }
 
