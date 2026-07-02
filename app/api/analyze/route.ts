@@ -62,6 +62,8 @@ export async function POST(request: Request) {
     const detail = caught instanceof Error ? caught.message : "";
     const message = detail.includes("Ollama") || detail.includes("MCP")
       ? "Could not analyze the meeting. Check that the local AI service is running, then try again."
+      : detail.includes("Groq")
+        ? "Could not analyze the meeting. Check your Groq configuration, then try again."
       : detail || "Meeting analysis failed.";
 
     return NextResponse.json({ error: message }, { status: 500 });

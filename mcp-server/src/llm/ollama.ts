@@ -179,7 +179,7 @@ function withInferredAssignees(
   }));
 }
 
-function normalizeMeetingAnalysis(
+export function normalizeMeetingAnalysis(
   value: unknown,
   transcript: string
 ): MeetingAnalysis {

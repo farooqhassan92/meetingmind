@@ -41,6 +41,8 @@ export async function POST(request: Request) {
     const message =
       detail.includes("Whisper") || detail.includes("MCP")
         ? "Could not transcribe audio. Check that your local transcription service is configured and try again."
+        : detail.includes("Groq")
+          ? "Could not transcribe audio. Check your Groq transcription configuration and file size, then try again."
         : detail || "Audio transcription failed. Please try again.";
 
     return NextResponse.json({ error: message }, { status: 500 });

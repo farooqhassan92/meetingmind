@@ -1,4 +1,5 @@
 import type { SemanticSearchResult } from "@/lib/semantic-search";
+import { answerWithGroq } from "@/lib/groq";
 
 type AnswerSearchInput = {
   query: string;
@@ -15,6 +16,7 @@ export function isAnswerServiceError(message: string) {
   return [
     "Answer",
     "Ollama",
+    "Groq",
     "fetch failed",
     "ECONNREFUSED",
     "UND_ERR_CONNECT_TIMEOUT"
@@ -66,6 +68,10 @@ export async function answerFromMeetingChunks(input: AnswerSearchInput) {
   }
 
   if (process.env.AI_PROVIDER !== "ollama") {
+    if (process.env.AI_PROVIDER === "groq") {
+      return answerWithGroq(input.query, buildContext(input.results));
+    }
+
     return buildExtractiveAnswer(input);
   }
 

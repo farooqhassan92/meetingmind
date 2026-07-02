@@ -1,6 +1,10 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
+import {
+  analyzeTranscriptWithGroq,
+  transcribeAudioWithGroq
+} from "@/lib/groq";
 import type { MeetingAnalysis } from "@/mcp-server/src/llm/schemas";
 
 type TranscribeInput = {
@@ -91,6 +95,10 @@ export function getMcpClient() {
 }
 
 export async function transcribeAudio(input: TranscribeInput) {
+  if (process.env.TRANSCRIPTION_PROVIDER === "groq") {
+    return transcribeAudioWithGroq(input);
+  }
+
   const client = await getMcpClient();
   const result = await client.callTool(
     {
@@ -110,6 +118,10 @@ export async function transcribeAudio(input: TranscribeInput) {
 }
 
 export async function analyzeMeeting(transcript: string) {
+  if (process.env.AI_PROVIDER === "groq") {
+    return analyzeTranscriptWithGroq(transcript);
+  }
+
   const client = await getMcpClient();
   const result = await client.callTool(
     {
