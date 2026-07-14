@@ -32,6 +32,8 @@ The app currently includes:
   ranges, stats, pagination, and delete support.
 - Semantic meeting search over pgvector meeting chunks, including answer mode
   with source notes and raw match mode.
+- GitHub Actions CI on pushes to `main`, pull requests, and manual runs. CI
+  installs dependencies, validates Prisma, lints, typechecks, and builds.
 
 ## Stack
 
@@ -42,7 +44,10 @@ The app currently includes:
 - Ollama for local analysis, answering, and embeddings
 - Local Whisper command or Groq for transcription
 - Groq as an optional hosted AI provider
+- Gemini as an optional hosted embedding provider
+- UploadThing for audio uploads
 - Resend as optional invite email delivery
+- GitHub Actions for CI
 
 ## Key Paths
 
@@ -59,10 +64,12 @@ The app currently includes:
 - `components/semantic-search-panel.tsx` - natural-language meeting search UI
 - `lib/mcp-client.ts` - Next.js backend client for MCP tools
 - `lib/organization-access.ts` - workspace access and permission helpers
+- `lib/providers.ts` - hosted/local provider routing helpers
 - `lib/meeting-chunks.ts` - chunk creation for semantic search
 - `mcp-server/src/` - MCP tool server for transcription and analysis
 - `prisma/schema.prisma` - data model for users, organizations, teams, meetings,
   chunks, action items, decisions, topics, and follow-up questions
+- `.github/workflows/ci.yml` - GitHub Actions CI workflow
 
 ## Local Setup
 
@@ -84,6 +91,12 @@ CLERK_SECRET_KEY="..."
 
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 APP_URL="http://localhost:3000"
+```
+
+Audio upload also needs UploadThing:
+
+```bash
+UPLOADTHING_TOKEN="..."
 ```
 
 Run Prisma migrations:
@@ -187,10 +200,68 @@ npm run dev              # Start the Next.js dev server
 npm run mcp:dev          # Start the MCP server directly
 npm run lint             # Run ESLint
 npm run build            # Build the app
+npm run start            # Start the production build locally
 npm run prisma:generate  # Regenerate Prisma client
 npm run prisma:migrate   # Run Prisma migrations locally
 npm run chunks:backfill  # Backfill semantic-search chunks
 ```
+
+`npm install` and `npm ci` also run `prisma generate` through the `postinstall`
+script, which keeps Prisma Client available during local installs and hosted
+builds.
+
+## Continuous Integration
+
+The repository includes `.github/workflows/ci.yml`.
+
+CI runs on:
+
+- pushes to `main`
+- pull requests
+- manual workflow dispatches from GitHub
+
+The workflow uses Node.js 20 and runs:
+
+```bash
+npm ci
+npx prisma validate
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+The workflow uses placeholder database/provider values for validation and build
+checks only. Production secrets still belong in the hosting environment.
+
+## Production Notes
+
+For Vercel or another hosted runtime, configure:
+
+```bash
+DATABASE_URL="..."
+DIRECT_URL="..."
+
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="..."
+CLERK_SECRET_KEY="..."
+
+UPLOADTHING_TOKEN="..."
+APP_URL="https://your-app.example"
+RESEND_API_KEY="..."
+INVITE_FROM_EMAIL="MeetingMind <onboarding@your-domain.example>"
+```
+
+For hosted AI, prefer Groq for analysis/transcription and Gemini for embeddings:
+
+```bash
+AI_PROVIDER="groq"
+TRANSCRIPTION_PROVIDER="groq"
+EMBEDDING_PROVIDER="gemini"
+GROQ_API_KEY="..."
+GEMINI_API_KEY="..."
+```
+
+The provider routing trims quoted/spaced values and avoids falling back to the
+local MCP/Ollama path in hosted runtimes when Groq is available.
 
 ## Known Local Requirements
 
